@@ -3,6 +3,7 @@ extern crate log;
 extern crate futures;
 extern crate libc;
 
+mod isolate;
 mod js_errors;
 mod libdeno;
 mod shared;
