@@ -165,10 +165,13 @@ function sendStart(): msg.StartRes {
   return startResMsg;
 }
 
+import * as msgRing from "./msg_ring";
+
 // This function bootstraps an environment within Deno, it is shared both by
 // the runtime and the compiler environments.
 // @internal
 export function start(source?: string): msg.StartRes {
+  msgRing.init();
   libdeno.recv(handleAsyncMsgFromRust);
 
   // First we send an empty `Start` message to let the privileged side know we

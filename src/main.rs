@@ -11,6 +11,7 @@ extern crate futures;
 extern crate serde_json;
 
 mod ansi;
+mod msg_ring;
 pub mod cli;
 pub mod compiler;
 pub mod deno_dir;

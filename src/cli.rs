@@ -4,6 +4,7 @@
 use crate::errors::DenoResult;
 use crate::isolate_init::IsolateInit;
 use crate::isolate_state::IsolateState;
+use crate::msg_ring;
 use crate::modules::Modules;
 use crate::permissions::DenoPermissions;
 use deno_core::deno_buf;
@@ -26,7 +27,7 @@ pub type CliOp = Op<Buf>;
 
 /// Implements deno_core::Behavior for the main Deno command-line.
 pub struct Cli {
-  shared: Vec<u8>, // Pin<Vec<u8>> ?
+  shared: msg_ring::Buffer, // Pin?
   init: IsolateInit,
   timeout_due: Cell<Option<Instant>>,
   pub modules: RefCell<Modules>,
@@ -40,11 +41,10 @@ impl Cli {
     state: Arc<IsolateState>,
     permissions: DenoPermissions,
   ) -> Self {
-    let mut shared = Vec::new();
-    shared.resize(1024 * 1024, 0);
+    let mut buffer = msg_ring::Buffer::new(1024 * 1024);
     Self {
       init,
-      shared,
+      buffer,
       timeout_due: Cell::new(None),
       modules: RefCell::new(Modules::new()),
       state,
@@ -94,8 +94,10 @@ impl Behavior<Buf> for Cli {
   }
 
   fn startup_shared(&mut self) -> Option<deno_buf> {
+    /*
     let ptr = self.shared.as_ptr() as *const u8;
     let len = self.shared.len();
+    */
     Some(unsafe { deno_buf::from_raw_parts(ptr, len) })
   }
 
@@ -120,6 +122,7 @@ impl Behavior<Buf> for Cli {
   }
 
   fn records_shift(&mut self) -> Option<Buf> {
+		
     unimplemented!()
   }
 }

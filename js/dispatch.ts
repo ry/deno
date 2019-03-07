@@ -4,6 +4,7 @@ import * as flatbuffers from "./flatbuffers";
 import * as msg from "gen/msg_generated";
 import * as errors from "./errors";
 import * as util from "./util";
+import { tx } from "./msg_ring";
 
 let nextCmdId = 0;
 const promiseTable = new Map<number, util.Resolvable<msg.Base>>();
@@ -84,7 +85,8 @@ function sendInternal(
   msg.Base.addCmdId(builder, cmdId);
   builder.finish(msg.Base.endBase(builder));
 
-  // const ui8 = builder.asUint8Array();
+  const ui8 = builder.asUint8Array();
+  tx.send(ui8);
 
   // Somehow put this in the shared buffer.
 

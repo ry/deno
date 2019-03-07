@@ -25,7 +25,7 @@ interface Libdeno {
 
   print(x: string, isErr?: boolean): void;
 
-  shared: ArrayBuffer;
+  shared: SharedArrayBuffer;
 
   // DEPRECATED
   builtinModules: { [s: string]: object };
