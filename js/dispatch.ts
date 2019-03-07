@@ -83,7 +83,12 @@ function sendInternal(
   msg.Base.addSync(builder, sync);
   msg.Base.addCmdId(builder, cmdId);
   builder.finish(msg.Base.endBase(builder));
-  const res = libdeno.send(builder.asUint8Array(), data);
+
+  // const ui8 = builder.asUint8Array();
+
+  // Somehow put this in the shared buffer.
+
+  const res = libdeno.send(null, data);
   builder.inUse = false;
   return [cmdId, res];
 }

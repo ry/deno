@@ -47,9 +47,14 @@ pub trait Behavior<R> {
 
   fn recv(&mut self, record: R, zero_copy_buf: deno_buf) -> (bool, Box<Op<R>>);
 
+  /// Clears the shared buffer.
   fn records_reset(&mut self);
+
+  /// Returns false if not enough room.
   fn records_push(&mut self, record: R) -> bool;
-  fn records_pop(&mut self) -> Option<R>;
+
+  /// Returns none if empty.
+  fn records_shift(&mut self) -> Option<R>;
 }
 
 pub struct Isolate<R, B: Behavior<R>> {
@@ -106,7 +111,7 @@ impl<R, B: Behavior<R>> Isolate<R, B> {
     assert_eq!(control_buf.len(), 0);
     let zero_copy_id = zero_copy_buf.zero_copy_id;
 
-    let req_record = isolate.behavior.records_pop().unwrap();
+    let req_record = isolate.behavior.records_shift().unwrap();
 
     isolate.behavior.records_reset();
 
@@ -370,7 +375,7 @@ mod tests {
     recv_count: usize,
     resolve_count: usize,
     push_count: usize,
-    pop_count: usize,
+    shift_count: usize,
     reset_count: usize,
     mod_map: HashMap<String, deno_mod>,
   }
@@ -381,7 +386,7 @@ mod tests {
         recv_count: 0,
         resolve_count: 0,
         push_count: 0,
-        pop_count: 0,
+        shift_count: 0,
         reset_count: 0,
         mod_map: HashMap::new(),
       }
@@ -427,8 +432,8 @@ mod tests {
       true
     }
 
-    fn records_pop(&mut self) -> Option<()> {
-      self.pop_count += 1;
+    fn records_shift(&mut self) -> Option<()> {
+      self.shift_count += 1;
       Some(())
     }
   }

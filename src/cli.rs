@@ -15,10 +15,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::Instant;
 
-// Buf represents a byte array returned from a "Op".
-// The message might be empty (which will be translated into a null object on
-// the javascript side) or it is a heap allocated opaque sequence of bytes.
-// Usually a flatbuffer message.
+// Buf represents a byte array returned from a "Op". The message might be empty
+// (which will be translated into a null object on the javascript side) or it is
+// a heap allocated opaque sequence of bytes.  Usually a flatbuffer message.
 pub type Buf = Box<[u8]>;
 
 pub type Isolate = deno_core::Isolate<Buf, Cli>;
@@ -120,7 +119,7 @@ impl Behavior<Buf> for Cli {
     unimplemented!()
   }
 
-  fn records_pop(&mut self) -> Option<Buf> {
+  fn records_shift(&mut self) -> Option<Buf> {
     unimplemented!()
   }
 }

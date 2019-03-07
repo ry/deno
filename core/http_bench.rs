@@ -29,7 +29,9 @@ const OP_READ: i32 = 3;
 const OP_WRITE: i32 = 4;
 const OP_CLOSE: i32 = 5;
 
-const INDEX_LEN: usize = 0;
+const INDEX_START: usize = 0;
+const INDEX_END: usize = 1;
+
 const NUM_RECORDS: usize = 128;
 const RECORD_SIZE: usize = 4;
 
@@ -50,15 +52,16 @@ struct HttpBench {
 impl HttpBench {
   fn new() -> Self {
     let mut shared32 = Vec::<i32>::new();
-    let n = 1 + 4 * NUM_RECORDS;
+    let n = 2 + 4 * NUM_RECORDS;
     shared32.resize(n, 0);
-    shared32[INDEX_LEN] = 0;
+    shared32[INDEX_START] = 0;
+    shared32[INDEX_END] = 0;
     Self { shared32 }
   }
 }
 
 fn idx(i: usize, off: usize) -> usize {
-  1 + i * RECORD_SIZE + off
+  2 + i * RECORD_SIZE + off
 }
 
 impl Behavior<Record> for HttpBench {
@@ -128,12 +131,13 @@ impl Behavior<Record> for HttpBench {
   }
 
   fn records_reset(&mut self) {
-    self.shared32[INDEX_LEN] = 0;
+    self.shared32[INDEX_START] = 0;
+    self.shared32[INDEX_END] = 0;
   }
 
   fn records_push(&mut self, record: Record) -> bool {
     debug!("push {:?}", record);
-    let i = self.shared32[INDEX_LEN] as usize;
+    let i = self.shared32[INDEX_END] as usize;
     if i >= NUM_RECORDS {
       return false;
     }
@@ -141,23 +145,23 @@ impl Behavior<Record> for HttpBench {
     self.shared32[idx(i, 1)] = record.op_id;
     self.shared32[idx(i, 2)] = record.arg;
     self.shared32[idx(i, 3)] = record.result;
-    self.shared32[INDEX_LEN] += 1;
+    self.shared32[INDEX_END] += 1;
     true
   }
 
-  fn records_pop(&mut self) -> Option<Record> {
-    if self.shared32[INDEX_LEN] == 0 {
+  fn records_shift(&mut self) -> Option<Record> {
+    let i = self.shared32[INDEX_START] as usize;
+    if i == self.shared32[INDEX_END] as usize {
       return None;
     }
-    self.shared32[INDEX_LEN] -= 1;
-    let i = self.shared32[INDEX_LEN] as usize;
-
-    Some(Record {
+    let record = Record {
       promise_id: self.shared32[idx(i, 0)],
       op_id: self.shared32[idx(i, 1)],
       arg: self.shared32[idx(i, 2)],
       result: self.shared32[idx(i, 3)],
-    })
+    };
+    self.shared32[INDEX_START] += 1;
+    Some(record)
   }
 }
 

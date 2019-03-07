@@ -6,52 +6,52 @@ const OP_ACCEPT = 2;
 const OP_READ = 3;
 const OP_WRITE = 4;
 const OP_CLOSE = 5;
-
-const INDEX_LEN = 0;
+const INDEX_START = 0;
+const INDEX_END = 1;
 const NUM_RECORDS = 128;
 const RECORD_SIZE = 4;
-const shared32 = new Int32Array(libdeno.shared);
-const global = this;
 
-if (!global["Deno"]) {
-  global["Deno"] = {};
-}
+const shared32 = new Int32Array(libdeno.shared);
 
 function idx(i, off) {
-  return 1 + i * RECORD_SIZE + off;
+  return 2 + i * RECORD_SIZE + off;
 }
 
 function recordsPush(promiseId, opId, arg, result) {
-  if (shared32[INDEX_LEN] >= NUM_RECORDS) {
+  let i = shared32[INDEX_END];
+  if (i >= NUM_RECORDS) {
     return false;
   }
-  const i = shared32[INDEX_LEN]++;
   shared32[idx(i, 0)] = promiseId;
   shared32[idx(i, 1)] = opId;
   shared32[idx(i, 2)] = arg;
   shared32[idx(i, 3)] = result;
+  shared32[INDEX_END]++;
   return true;
 }
 
-function recordsPop() {
-  if (shared32[INDEX_LEN] == 0) {
+function recordsShift() {
+  if (shared32[INDEX_START] == shared32[INDEX_END]) {
     return null;
   }
-  const i = --shared32[INDEX_LEN];
-  return {
+  const i = shared32[INDEX_START];
+  const record = {
     promiseId: shared32[idx(i, 0)],
     opId: shared32[idx(i, 1)],
     arg: shared32[idx(i, 2)],
     result: shared32[idx(i, 3)]
   };
+  shared32[INDEX_START]++;
+  return record;
 }
 
 function recordsReset() {
-  shared32[INDEX_LEN] = 0;
+  shared32[INDEX_START] = 0;
+  shared32[INDEX_END] = 0;
 }
 
 function recordsSize() {
-  return shared32[INDEX_LEN];
+  return shared32[INDEX_END] - shared32[INDEX_START];
 }
 
 const requestBuf = new Uint8Array(64 * 1024);
@@ -91,13 +91,13 @@ function sendSync(opId, arg) {
   if (recordsSize() != 1) {
     throw Error("Expected sharedSimple to have size 1");
   }
-  let { result } = recordsPop();
+  let { result } = recordsShift();
   return result;
 }
 
 function handleAsyncMsgFromRust() {
   while (recordsSize() > 0) {
-    const { promiseId, result } = recordsPop();
+    const { promiseId, result } = recordsShift();
     const p = promiseMap.get(promiseId);
     promiseMap.delete(promiseId);
     p.resolve(result);

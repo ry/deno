@@ -18,7 +18,10 @@ interface EvalErrorInfo {
 interface Libdeno {
   recv(cb: MessageCallback): void;
 
-  send(control: ArrayBufferView, data?: ArrayBufferView): null | Uint8Array;
+  send(
+    control: null | ArrayBufferView,
+    data?: ArrayBufferView
+  ): null | Uint8Array;
 
   print(x: string, isErr?: boolean): void;
 
