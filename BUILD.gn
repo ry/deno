@@ -16,6 +16,7 @@ group("default") {
     "core:deno_core_http_bench",
     "core:deno_core_test",
     "libdeno:test_cc",
+    "shared_queue:shared_queue_test",
   ]
 }
 

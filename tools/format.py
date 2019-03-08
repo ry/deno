@@ -24,8 +24,8 @@ qrun([clang_format_path, "-i", "-style", "Google"] +
      find_exts(["libdeno"], [".cc", ".h"]))
 
 print "gn format"
-for fn in ["BUILD.gn", ".gn"] + find_exts(["build_extra", "libdeno"],
-                                          [".gn", ".gni"]):
+for fn in ["BUILD.gn", ".gn"] + find_exts(
+    ["build_extra", "libdeno", "shared_queue"], [".gn", ".gni"]):
     qrun(["third_party/depot_tools/gn", "format", fn], env=google_env())
 
 print "yapf"
@@ -37,12 +37,13 @@ qrun(
 print "prettier"
 qrun(["node", prettier, "--write", "--loglevel=error"] + ["rollup.config.js"] +
      glob("*.json") + glob("*.md") +
-     find_exts([".github", "js", "tests", "tools", "website", "core"],
-               [".js", ".json", ".ts", ".md"],
+     find_exts([
+         ".github", "js", "tests", "tools", "website", "core", "shared_queue"
+     ], [".js", ".json", ".ts", ".md"],
                skip=["tools/clang", "js/deps"]))
 
 print "rustfmt"
 qrun([
     "third_party/rustfmt/" + platform() +
     "/rustfmt", "--config-path", rustfmt_config, "build.rs"
-] + find_exts(["src", "core"], [".rs"]))
+] + find_exts(["src", "core", "shared_queue"], [".rs"]))
