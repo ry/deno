@@ -64,8 +64,7 @@ export function init() {
   // The SharedArrayBuffer in split half. First half is for the sender, second
   // half is for the receiver.
   const commonConfig = {
-    byteLength: libdeno.shared.byteLength,
-    fillDirection: FillDirection.BottomUp,
+    byteLength: libdeno.shared.byteLength
   };
   rx = new MsgRingReceiver(libdeno.shared, {
     byteOffset: 0,

@@ -1,9 +1,10 @@
+#![allow(dead_code)]
+
 use deno_core::deno_buf;
 use std::marker;
 use std::mem::{forget, size_of};
 use std::ops::{Add, BitAnd, Deref, DerefMut, Not, Sub};
 use std::slice;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -135,7 +136,7 @@ impl Buffer {
   }
 
   pub fn into_deno_buf(&self) -> deno_buf {
-    deno_buf::from_raw_parts(self.ptr, self.byte_length)
+    unsafe { deno_buf::from_raw_parts(self.ptr, self.byte_length) }
   }
 
   pub unsafe fn from_raw_parts(ptr: *mut u8, byte_length: usize) -> Self {
@@ -250,6 +251,8 @@ struct Window {
   pub epoch: i32,
   pub tail_position: usize,
   pub head_position: usize,
+
+  init_epoch: i32,
 }
 
 impl Window {
@@ -263,6 +266,7 @@ impl Window {
       epoch,
       head_position: 0,
       tail_position: 0,
+      init_epoch: epoch,
     };
     this.init();
     this
@@ -315,13 +319,22 @@ impl Window {
   }
 
   fn init(&mut self) {
+    self.reset();
+  }
+
+  fn reset(&mut self) {
+    self.tail_position = 0;
+    self.head_position = 0;
+    self.epoch = self.init_epoch;
+
     let target = self.buffer.byte_length() as i32;
     let header_byte_offset = self.header_byte_offset(0);
-    /*
-    let header_atomic: &mut Futex =
+    let header_ref: &mut i32 =
       unsafe { self.buffer.get_mut(header_byte_offset) };
-    header_atomic.compare_and_swap(0, target, Ordering::AcqRel);
-    */
+    *header_ref = target;
+    //let header_atomic: &mut Futex =
+    //  unsafe { self.buffer.get_mut(header_byte_offset) };
+    //header_atomic.compare_and_swap(0, target, Ordering::AcqRel);
   }
 
   pub fn acquire_frame(&mut self, wait: bool) -> i32 {
@@ -341,41 +354,46 @@ impl Window {
     let header_atomic: &mut Futex =
       unsafe { self.buffer.get_mut(header_byte_offset) };
     */
-    let mut header = self.buffer.get::<i32>(header_byte_offset);
+    let header = *unsafe { self.buffer.get::<i32>(header_byte_offset) };
 
-    let mut spin_count_remaining = self.config.spin_count;
-    let mut sleep = false;
+    // let mut spin_count_remaining = self.config.spin_count;
+    // let mut sleep = false;
+
+    if header & FrameHeader::EpochMask != self.epoch {
+      assert!(!wait);
+      return FrameHeader::None;
+    }
 
     // Note that operator precendece in Rust is different than in C and
     // JavaScript (& has higher precedence than ==), so this is correct.
-    while header & FrameHeader::EpochMask != self.epoch {
-      if !wait {
-        return FrameHeader::None;
-      }
-
-      if spin_count_remaining == 0 {
-        let expect = header;
-        let target = header | FrameHeader::HasWaitersFlag;
-        header =
-          header_atomic.compare_and_swap(expect, target, Ordering::AcqRel);
-        if expect != header {
-          continue;
-        }
-        header = target;
-        sleep = true;
-        self.counters.wait += 1;
-      } else {
-        spin_count_remaining -= 1;
-        self.counters.spin += 1;
-      }
-
-      if sleep {
-        header_atomic.wait(header, None);
-      } else {
-        std::thread::yield_now();
-      }
-      header = header_atomic.load(Ordering::Acquire);
-    }
+    //while header & FrameHeader::EpochMask != self.epoch {
+    //  if !wait {
+    //    return FrameHeader::None;
+    //  }
+    //
+    //  if spin_count_remaining == 0 {
+    //    let expect = header;
+    //    let target = header | FrameHeader::HasWaitersFlag;
+    //    header =
+    //      header_atomic.compare_and_swap(expect, target, Ordering::AcqRel);
+    //    if expect != header {
+    //      continue;
+    //    }
+    //    header = target;
+    //    sleep = true;
+    //    self.counters.wait += 1;
+    //  } else {
+    //    spin_count_remaining -= 1;
+    //    self.counters.spin += 1;
+    //  }
+    //
+    //  if sleep {
+    //    header_atomic.wait(header, None);
+    //  } else {
+    //    std::thread::yield_now();
+    //  }
+    //  header = header_atomic.load(Ordering::Acquire);
+    //}
 
     let byte_length = header & FrameHeader::ByteLengthMask;
     let byte_length = byte_length as usize;
@@ -395,15 +413,21 @@ impl Window {
     let new_header = byte_length as i32 | flags | tail_epoch;
 
     let header_byte_offset = self.header_byte_offset(self.tail_position);
-    let header_atomic: &mut Futex =
+    let header_ref: &mut i32 =
       unsafe { self.buffer.get_mut(header_byte_offset) };
+    let old_header = *header_ref;
+    *header_ref = new_header;
+    assert!(old_header & FrameHeader::HasWaitersFlag == 0);
 
-    let old_header = header_atomic.swap(new_header, Ordering::AcqRel);
-
-    if old_header & FrameHeader::HasWaitersFlag != 0 {
-      header_atomic.notify_one();
-      self.counters.notify += 1;
-    }
+    // let header_atomic: &mut Futex =
+    //   unsafe { self.buffer.get_mut(header_byte_offset) };
+    //
+    // let old_header = header_atomic.swap(new_header, Ordering::AcqRel);
+    //
+    // if old_header & FrameHeader::HasWaitersFlag != 0 {
+    //   header_atomic.notify_one();
+    //   self.counters.notify += 1;
+    // }
 
     self.tail_position += byte_length;
     self.counters.release += 1;
@@ -421,8 +445,12 @@ impl Sender {
     }
   }
 
-  pub fn compose(&mut self, byte_length: usize) -> Send {
-    Send::new(&mut self.window, byte_length)
+  pub fn reset(&mut self) {
+    self.window.reset();
+  }
+
+  pub fn compose(&mut self, byte_length: usize) -> Option<Send> {
+    Send::maybe_new(&mut self.window, byte_length)
   }
 
   pub fn counters(&self) -> Counters {
@@ -436,18 +464,24 @@ pub struct Send<'msg> {
 }
 
 impl<'msg> Send<'msg> {
-  fn new(window: &'msg mut Window, message_byte_length: usize) -> Self {
-    let mut this = Self {
+  fn maybe_new(
+    window: &'msg mut Window,
+    message_byte_length: usize,
+  ) -> Option<Self> {
+    let mut r = Self {
       window,
       allocation_byte_length: 0,
     };
-    this.allocate(message_byte_length);
-    this
+    if r.allocate(message_byte_length) {
+      Some(r)
+    } else {
+      None
+    }
   }
 
-  pub fn resize(&mut self, message_byte_length: usize) {
-    self.allocate(message_byte_length)
-  }
+  // pub fn resize(&mut self, message_byte_length: usize) {
+  //   self.allocate(message_byte_length)
+  // }
 
   pub fn send(self) {
     self.window.counters.message += 1;
@@ -458,7 +492,7 @@ impl<'msg> Send<'msg> {
 
   pub fn dispose(self) {}
 
-  fn allocate(&mut self, byte_length: usize) {
+  fn allocate(&mut self, byte_length: usize) -> bool {
     self.allocation_byte_length = FrameAllocation::HeaderByteLength as usize
       + byte_length.align(FrameAllocation::Alignment as usize);
     assert!(
@@ -470,8 +504,12 @@ impl<'msg> Send<'msg> {
           .window
           .release_frame(self.window.byte_length(), FrameHeader::None);
       }
-      self.window.acquire_frame(true);
+      let header = self.window.acquire_frame(false);
+      if header == FrameHeader::None {
+        return false;
+      }
     }
+    true
   }
 }
 
@@ -506,8 +544,12 @@ impl Receiver {
     }
   }
 
-  pub fn receive(&mut self) -> Receive {
-    Receive::new(&mut self.window)
+  pub fn reset(&mut self) {
+    self.window.reset();
+  }
+
+  pub fn receive(&mut self) -> Option<Receive> {
+    Receive::maybe_new(&mut self.window)
   }
 
   pub fn counters(&self) -> Counters {
@@ -520,20 +562,33 @@ pub struct Receive<'msg: 'msg> {
 }
 
 impl<'msg> Receive<'msg> {
-  fn new(window: &'msg mut Window) -> Self {
-    let mut this = Self { window };
-    this.acquire();
-    this
+  fn maybe_new(window: &'msg mut Window) -> Option<Self> {
+    let mut r = Self { window };
+    if r.acquire() {
+      Some(r)
+    } else {
+      None
+    }
   }
 
-  fn acquire(&mut self) {
+  fn acquire(&mut self) -> bool {
     debug_assert_eq!(self.window.byte_length(), 0);
-    while self.window.acquire_frame(true) & FrameHeader::HasMessageFlag == 0 {
+    let mut skipped = false;
+    loop {
+      let header = self.window.acquire_frame(false);
+      if header == FrameHeader::None {
+        return false;
+      }
+      if header & FrameHeader::HasMessageFlag != 0 {
+        self.window.counters.message += 1;
+        return true;
+      }
       self
         .window
         .release_frame(self.window.byte_length(), FrameHeader::None);
+      assert!(skipped == false);
+      skipped = true;
     }
-    self.window.counters.message += 1;
   }
 
   fn release(&mut self) {
@@ -559,6 +614,7 @@ impl<'msg> Drop for Receive<'msg> {
   }
 }
 
+/*
 #[cfg(test)]
 mod test {
   use super::{Buffer, MsgRing};
@@ -692,3 +748,4 @@ mod test {
     GLOBAL_MUTEX.lock().unwrap()
   }
 }
+*/

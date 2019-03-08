@@ -69,11 +69,7 @@ fn empty_buf() -> Buf {
 /// This functions invoked every time libdeno.send() is called.
 /// control corresponds to the first argument of libdeno.send().
 /// data corresponds to the second argument of libdeno.send().
-pub fn dispatch(
-  cli: &Cli,
-  control: deno_buf,
-  data: deno_buf,
-) -> (bool, Box<CliOp>) {
+pub fn dispatch(cli: &Cli, control: Buf, data: deno_buf) -> (bool, Box<CliOp>) {
   let base = msg::get_root_as_base(&control);
   let is_sync = base.sync();
   let inner_type = base.inner_type();

@@ -11,7 +11,6 @@ extern crate futures;
 extern crate serde_json;
 
 mod ansi;
-mod msg_ring;
 pub mod cli;
 pub mod compiler;
 pub mod deno_dir;
@@ -25,6 +24,7 @@ pub mod isolate_state;
 pub mod js_errors;
 pub mod modules;
 pub mod msg;
+mod msg_ring;
 pub mod msg_util;
 pub mod ops;
 pub mod permissions;

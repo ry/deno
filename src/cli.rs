@@ -1,11 +1,13 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 #![allow(unused_variables)]
+#![allow(dead_code)]
 
 use crate::errors::DenoResult;
 use crate::isolate_init::IsolateInit;
 use crate::isolate_state::IsolateState;
-use crate::msg_ring;
 use crate::modules::Modules;
+use crate::msg_ring;
+use crate::ops;
 use crate::permissions::DenoPermissions;
 use deno_core::deno_buf;
 use deno_core::deno_mod;
@@ -27,7 +29,9 @@ pub type CliOp = Op<Buf>;
 
 /// Implements deno_core::Behavior for the main Deno command-line.
 pub struct Cli {
-  shared: msg_ring::Buffer, // Pin?
+  shared: Option<deno_buf>, // Pin?
+  tx: msg_ring::Sender,
+  rx: msg_ring::Receiver,
   init: IsolateInit,
   timeout_due: Cell<Option<Instant>>,
   pub modules: RefCell<Modules>,
@@ -41,10 +45,14 @@ impl Cli {
     state: Arc<IsolateState>,
     permissions: DenoPermissions,
   ) -> Self {
-    let mut buffer = msg_ring::Buffer::new(1024 * 1024);
+    let buffer = msg_ring::Buffer::new(1024 * 1024);
+    let shared = buffer.into_deno_buf();
+    let (tx, rx) = msg_ring::MsgRing::new(buffer).split();
     Self {
       init,
-      buffer,
+      shared: Some(shared),
+      tx,
+      rx,
       timeout_due: Cell::new(None),
       modules: RefCell::new(Modules::new()),
       state,
@@ -94,11 +102,7 @@ impl Behavior<Buf> for Cli {
   }
 
   fn startup_shared(&mut self) -> Option<deno_buf> {
-    /*
-    let ptr = self.shared.as_ptr() as *const u8;
-    let len = self.shared.len();
-    */
-    Some(unsafe { deno_buf::from_raw_parts(ptr, len) })
+    self.shared.take()
   }
 
   fn resolve(&mut self, specifier: &str, referrer: deno_mod) -> deno_mod {
@@ -107,22 +111,37 @@ impl Behavior<Buf> for Cli {
 
   fn recv(
     &mut self,
-    record: Buf,
+    control: Buf,
     zero_copy_buf: deno_buf,
   ) -> (bool, Box<CliOp>) {
-    unimplemented!()
+    ops::dispatch(self, control, zero_copy_buf)
   }
 
   fn records_reset(&mut self) {
-    unimplemented!()
+    self.tx.reset();
+    self.rx.reset();
   }
 
   fn records_push(&mut self, record: Buf) -> bool {
-    unimplemented!()
+    let maybe_msg = self.tx.compose(record.len());
+    if let Some(mut msg) = maybe_msg {
+      msg.copy_from_slice(&record);
+      msg.send();
+      debug!("compose ok");
+      true
+    } else {
+      debug!("compose fail");
+      false
+    }
   }
 
   fn records_shift(&mut self) -> Option<Buf> {
-		
-    unimplemented!()
+    self.rx.receive().map(|msg| {
+      let mut v = Vec::new();
+      v.resize(msg.len(), 0);
+      let mut bs = v.into_boxed_slice();
+      bs.copy_from_slice(&msg[..]);
+      bs
+    })
   }
 }
