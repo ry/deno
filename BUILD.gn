@@ -156,6 +156,11 @@ rust_executable("deno") {
   ]
 }
 
+rust_test("shared_queue") {
+  source_root = "src/shared_queue.rs"
+  extern = [ "core:deno_core" ]
+}
+
 rust_test("test_rs") {
   source_root = "src/main.rs"
   extern = main_extern
