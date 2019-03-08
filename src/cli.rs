@@ -5,7 +5,6 @@
 use crate::errors::DenoResult;
 use crate::isolate_init::IsolateInit;
 use crate::isolate_state::IsolateState;
-use crate::modules::Modules;
 use crate::msg_ring;
 use crate::ops;
 use crate::permissions::DenoPermissions;
@@ -14,7 +13,6 @@ use deno_core::deno_mod;
 use deno_core::Behavior;
 use deno_core::Op;
 use std::cell::Cell;
-use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -34,9 +32,8 @@ pub struct Cli {
   rx: msg_ring::Receiver,
   init: IsolateInit,
   timeout_due: Cell<Option<Instant>>,
-  pub modules: RefCell<Modules>,
   pub state: Arc<IsolateState>,
-  pub permissions: Arc<DenoPermissions>,
+  pub permissions: Arc<DenoPermissions>, // TODO(ry) move to IsolateState
 }
 
 impl Cli {
@@ -54,7 +51,6 @@ impl Cli {
       tx,
       rx,
       timeout_due: Cell::new(None),
-      modules: RefCell::new(Modules::new()),
       state,
       permissions: Arc::new(permissions),
     }

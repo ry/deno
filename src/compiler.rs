@@ -13,7 +13,6 @@ use futures::Future;
 use serde_json;
 use std::str;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::sync::Mutex;
 
 lazy_static! {
@@ -49,7 +48,7 @@ impl ModuleMetaData {
   }
 }
 
-fn lazy_start(parent_state: &Arc<IsolateState>) -> Resource {
+fn lazy_start(parent_state: &IsolateState) -> Resource {
   let mut cell = C_RID.lock().unwrap();
   let isolate_init = isolate_init::compiler_isolate_init();
   let permissions = DenoPermissions {
@@ -59,10 +58,11 @@ fn lazy_start(parent_state: &Arc<IsolateState>) -> Resource {
     allow_net: AtomicBool::new(true),
     allow_run: AtomicBool::new(false),
   };
+
   let rid = cell.get_or_insert_with(|| {
     let resource = workers::spawn(
       isolate_init,
-      parent_state.clone(),
+      parent_state,
       "compilerMain()".to_string(),
       permissions,
     );
@@ -81,7 +81,7 @@ fn req(specifier: &str, referrer: &str) -> Buf {
 }
 
 pub fn compile_sync(
-  parent_state: &Arc<IsolateState>,
+  parent_state: &IsolateState,
   specifier: &str,
   referrer: &str,
   module_meta_data: &ModuleMetaData,

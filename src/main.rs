@@ -40,8 +40,8 @@ pub mod workers;
 mod eager_unix;
 
 use crate::cli::Cli;
+use crate::errors::RustOrJsError;
 use crate::isolate_state::IsolateState;
-use deno_core::JSError;
 use futures::lazy;
 use futures::Future;
 use log::{LevelFilter, Metadata, Record};
@@ -65,15 +65,9 @@ impl log::Log for Logger {
   fn flush(&self) {}
 }
 
-fn print_err_and_exit(err: errors::RustOrJsError) {
+fn print_err_and_exit(err: RustOrJsError) {
   eprintln!("{}", err.to_string());
   std::process::exit(1);
-}
-
-fn js_check(r: Result<(), JSError>) {
-  if let Err(e) = r {
-    print_err_and_exit(e.into())
-  }
 }
 
 fn main() {
@@ -108,54 +102,38 @@ fn main() {
   let should_prefetch = flags.prefetch || flags.info;
   let should_display_info = flags.info;
 
-  let main_future = lazy(move || {
-    println!("Hello world");
-    let state = Arc::new(IsolateState::new(flags, rest_argv, None));
-    let isolate_init = isolate_init::deno_isolate_init();
-    let permissions = permissions::DenoPermissions::from_flags(&state.flags);
-    let cli = Cli::new(isolate_init, state, permissions);
-    let isolate = deno_core::Isolate::new(cli);
+  let state = Arc::new(IsolateState::new(flags, rest_argv, None));
+  let state_ = state.clone();
+  let isolate_init = isolate_init::deno_isolate_init();
+  let permissions = permissions::DenoPermissions::from_flags(&state.flags);
+  let cli = Cli::new(isolate_init, state_, permissions);
+  let isolate = deno_core::Isolate::new(cli);
 
+  let main_future = lazy(move || -> Result<(), RustOrJsError> {
     // Setup runtime.
-    js_check(isolate.execute("<anonymous>", "denoMain()"));
-
-    isolate.then(|r| {
-      js_check(r);
-      Ok(())
-    })
-  });
-
-  // tokio::runtime::current_thread::run(main_future);
-  tokio::run(main_future);
-
-  /*
-  tokio_util::init(|| {
-    isolate
-      .execute("denoMain();")
-      .map_err(errors::RustOrJsError::from)
-      .unwrap_or_else(print_err_and_exit);
+    isolate.execute("<anonymous>", "denoMain()")?;
 
     // Execute main module.
-    if let Some(main_module) = isolate.state.main_module() {
+    if let Some(main_module) = state.main_module() {
       debug!("main_module {}", main_module);
-      isolate
-        .execute_mod(&main_module, should_prefetch)
-        .unwrap_or_else(print_err_and_exit);
+      state.mod_execute(&isolate, &main_module, should_prefetch)?;
       if should_display_info {
         // Display file info and exit. Do not run file
-        modules::print_file_info(
-          &isolate.modules.borrow(),
-          &isolate.state.dir,
-          main_module,
-        );
+        let m = state.modules.lock().unwrap();
+        m.print_file_info(&state.dir, main_module);
         std::process::exit(0);
       }
     }
-
-    isolate
-      .event_loop()
-      .map_err(errors::RustOrJsError::from)
-      .unwrap_or_else(print_err_and_exit);
+    Ok(())
   });
-  */
+
+  let f = main_future.then(|r| -> Result<(), ()> {
+    if let Err(err) = r {
+      print_err_and_exit(err);
+    }
+    Ok(())
+  });
+
+  // tokio::runtime::current_thread::run(main_future);
+  tokio::run(f);
 }

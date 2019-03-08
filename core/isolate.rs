@@ -202,8 +202,10 @@ impl<R, B: Behavior<R>> Isolate<R, B> {
     }
   }
 
+  /// Low-level module creation.
+  /// You probably want to use IsolateState::mod_execute instead.
   pub fn mod_new(
-    &mut self,
+    &self,
     main: bool,
     name: &str,
     source: &str,
@@ -225,7 +227,7 @@ impl<R, B: Behavior<R>> Isolate<R, B> {
     Ok(id)
   }
 
-  pub fn mod_get_imports(&mut self, id: deno_mod) -> Vec<String> {
+  pub fn mod_get_imports(&self, id: deno_mod) -> Vec<String> {
     let len =
       unsafe { libdeno::deno_mod_imports_len(self.libdeno_isolate, id) };
     let mut out = Vec::new();
@@ -255,6 +257,17 @@ impl<R, B: Behavior<R>> Isolate<R, B> {
     Ok(())
   }
 
+  pub fn mod_evaluate(&self, id: deno_mod) -> Result<(), JSError> {
+    unsafe {
+      libdeno::deno_mod_evaluate(self.libdeno_isolate, self.as_raw_ptr(), id)
+    };
+    if let Some(js_error) = self.last_exception() {
+      return Err(js_error);
+    }
+    Ok(())
+  }
+
+  /// Called during mod_instantiate() only.
   extern "C" fn resolve_cb(
     user_data: *mut libc::c_void,
     specifier_ptr: *const libc::c_char,
@@ -264,16 +277,6 @@ impl<R, B: Behavior<R>> Isolate<R, B> {
     let specifier_c: &CStr = unsafe { CStr::from_ptr(specifier_ptr) };
     let specifier: &str = specifier_c.to_str().unwrap();
     isolate.behavior.resolve(specifier, referrer)
-  }
-
-  pub fn mod_evaluate(&self, id: deno_mod) -> Result<(), JSError> {
-    unsafe {
-      libdeno::deno_mod_evaluate(self.libdeno_isolate, self.as_raw_ptr(), id)
-    };
-    if let Some(js_error) = self.last_exception() {
-      return Err(js_error);
-    }
-    Ok(())
   }
 }
 

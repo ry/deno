@@ -25,7 +25,7 @@ pub struct Worker {
 impl Worker {
   pub fn new(
     init: IsolateInit,
-    parent_state: &Arc<IsolateState>,
+    parent_state: &IsolateState,
     permissions: DenoPermissions,
   ) -> (Self, WorkerChannels) {
     let (worker_in_tx, worker_in_rx) = mpsc::channel::<Buf>(1);
@@ -63,7 +63,7 @@ impl Future for Worker {
 
 pub fn spawn(
   init: IsolateInit,
-  state: Arc<IsolateState>,
+  state: &IsolateState,
   js_source: String,
   permissions: DenoPermissions,
 ) -> resources::Resource {
@@ -73,9 +73,9 @@ pub fn spawn(
   // let (js_error_tx, js_error_rx) = oneshot::channel::<JSError>();
   let (p, c) = oneshot::channel::<resources::Resource>();
   let builder = thread::Builder::new().name("worker".to_string());
+  let (worker, external_channels) = Worker::new(init, state, permissions);
   let _tid = builder
     .spawn(move || {
-      let (worker, external_channels) = Worker::new(init, &state, permissions);
       let resource = resources::add_worker(external_channels);
       let resource_ = resource.clone();
 
