@@ -16,6 +16,7 @@ group("default") {
     "core:deno_core_http_bench",
     "core:deno_core_test",
     "libdeno:test_cc",
+    "shared_queue:shared_queue_test",
   ]
 }
 
@@ -155,11 +156,6 @@ rust_executable("deno") {
   inputs = [
     "Cargo.toml",
   ]
-}
-
-rust_test("shared_queue") {
-  source_root = "src/shared_queue.rs"
-  extern = [ "core:deno_core" ]
 }
 
 rust_test("test_rs") {

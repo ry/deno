@@ -1,6 +1,8 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use futures::future::lazy;
+
 const MAX_RECORDS: usize = 100;
 
 /// Total number of records added.
@@ -141,6 +143,12 @@ impl SharedQueue {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use deno_core::deno_buf;
+  use deno_core::Behavior;
+  use deno_core::Isolate;
+  use deno_core::JSError;
+  use deno_core::Op;
+  use futures::future::Future;
 
   #[test]
   fn basic() {
@@ -210,5 +218,90 @@ mod tests {
     assert_eq!(q.len(), 0);
 
     assert!(!q.push(alloc_buf(1)));
+  }
+
+  struct TestBehavior {
+    recv_count: usize,
+    push_count: usize,
+    shift_count: usize,
+    reset_count: usize,
+    q: SharedQueue,
+  }
+
+  impl TestBehavior {
+    fn new() -> Self {
+      Self {
+        recv_count: 0,
+        push_count: 0,
+        shift_count: 0,
+        reset_count: 0,
+        q: SharedQueue::new(),
+      }
+    }
+  }
+
+  impl Behavior<Buf> for TestBehavior {
+    fn startup_snapshot(&mut self) -> Option<deno_buf> {
+      None
+    }
+
+    fn startup_shared(&mut self) -> Option<deno_buf> {
+      None
+    }
+
+    fn recv(
+      &mut self,
+      record: Buf,
+      _zero_copy_buf: deno_buf,
+    ) -> (bool, Box<Op<Buf>>) {
+      self.recv_count += 1;
+      // self.q.shift();
+      // (false, Box::new(futures::future::ok(())))
+      unimplemented!()
+    }
+
+    fn resolve(
+      &mut self,
+      specifier: &str,
+      _referrer: deno_core::deno_mod,
+    ) -> deno_core::deno_mod {
+      unimplemented!()
+    }
+
+    fn records_reset(&mut self) {
+      self.reset_count += 1;
+      self.q.reset();
+    }
+
+    fn records_push(&mut self, record: Buf) -> bool {
+      self.push_count += 1;
+      self.q.push(record)
+    }
+
+    fn records_shift(&mut self) -> Option<Buf> {
+      self.shift_count += 1;
+      self.q.shift()
+    }
+  }
+
+  fn js_check(r: Result<(), JSError>) {
+    if let Err(e) = r {
+      panic!(e.to_string());
+    }
+  }
+
+  #[test]
+  fn js() {
+    let js_source = include_str!("shared_queue.js");
+
+    let isolate = Isolate::new(TestBehavior::new());
+    let future = lazy(move || {
+      js_check(isolate.execute("shared_queue.js", js_source));
+      isolate.then(|r| {
+        js_check(r);
+        Ok(())
+      })
+    });
+    tokio::run(future);
   }
 }

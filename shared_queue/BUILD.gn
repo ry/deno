@@ -1,0 +1,10 @@
+import("//build_extra/rust/rust.gni")
+
+rust_test("shared_queue_test") {
+  source_root = "shared_queue.rs"
+  extern = [
+    "../core:deno_core",
+    "$rust_build:futures",
+    "$rust_build:tokio",
+  ]
+}
