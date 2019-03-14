@@ -1,5 +1,14 @@
 import("//build_extra/rust/rust.gni")
 
+group("default") {
+  testonly = true
+  deps = [
+    ":deno_core_http_bench",
+    ":deno_core_test",
+    ":shared_queue_test",
+  ]
+}
+
 # deno_core does not depend on flatbuffers nor tokio.
 main_extern = [
   "$rust_build:futures",
@@ -33,5 +42,14 @@ rust_executable("deno_core_http_bench") {
     "$rust_build:log",
     "$rust_build:tokio",
     ":deno_core"
+  ]
+}
+
+rust_test("shared_queue_test") {
+  source_root = "shared_queue.rs"
+  extern = [
+    ":deno_core",
+    "$rust_build:futures",
+    "$rust_build:tokio",
   ]
 }
