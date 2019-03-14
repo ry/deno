@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use futures::future::lazy;
+use deno_core::deno_buf;
 
 const MAX_RECORDS: usize = 100;
 
@@ -40,6 +41,12 @@ impl SharedQueue {
     q
   }
 
+  pub fn as_deno_buf(&self) -> deno_buf {
+    let ptr = self.bytes.as_ptr();
+    let len = self.bytes.len();
+    unsafe { deno_buf::from_raw_parts(ptr, len) }
+  }
+
   /// Clears the shared buffer.
   fn reset(&mut self) {
     let s: &mut [u32] = self.as_u32_slice_mut();
@@ -60,7 +67,7 @@ impl SharedQueue {
     unsafe { std::slice::from_raw_parts_mut(p, self.bytes.len() / 4) }
   }
 
-  fn len(&self) -> usize {
+  fn active_records(&self) -> usize {
     let s = self.as_u32_slice();
     (s[INDEX_NUM_RECORDS] - s[INDEX_NUM_SHIFTED_OFF]) as usize
   }
@@ -168,32 +175,32 @@ mod tests {
     let r = vec![8, 9, 10, 11].into_boxed_slice();
     assert!(q.push(r));
     assert_eq!(q.num_records(), 3);
-    assert_eq!(q.len(), 3);
+    assert_eq!(q.active_records(), 3);
 
     let r = q.shift().unwrap();
     assert_eq!(r.as_ref(), vec![1, 2, 3, 4, 5].as_slice());
     assert_eq!(q.num_records(), 3);
-    assert_eq!(q.len(), 2);
+    assert_eq!(q.active_records(), 2);
 
     let r = q.shift().unwrap();
     assert_eq!(r.as_ref(), vec![6, 7].as_slice());
     assert_eq!(q.num_records(), 3);
-    assert_eq!(q.len(), 1);
+    assert_eq!(q.active_records(), 1);
 
     let r = q.shift().unwrap();
     assert_eq!(r.as_ref(), vec![8, 9, 10, 11].as_slice());
     assert_eq!(q.num_records(), 3);
-    assert_eq!(q.len(), 0);
+    assert_eq!(q.active_records(), 0);
 
     assert!(q.shift().is_none());
     assert!(q.shift().is_none());
 
     assert_eq!(q.num_records(), 3);
-    assert_eq!(q.len(), 0);
+    assert_eq!(q.active_records(), 0);
 
     q.reset();
     assert_eq!(q.num_records(), 0);
-    assert_eq!(q.len(), 0);
+    assert_eq!(q.active_records(), 0);
   }
 
   fn alloc_buf(byte_length: usize) -> Buf {
@@ -206,16 +213,16 @@ mod tests {
   fn overflow() {
     let mut q = SharedQueue::new();
     assert!(q.push(alloc_buf(RECORDS_SIZE - 1)));
-    assert_eq!(q.len(), 1);
+    assert_eq!(q.active_records(), 1);
     assert!(!q.push(alloc_buf(2)));
-    assert_eq!(q.len(), 1);
+    assert_eq!(q.active_records(), 1);
     assert!(q.push(alloc_buf(1)));
-    assert_eq!(q.len(), 2);
+    assert_eq!(q.active_records(), 2);
 
     assert_eq!(q.shift().unwrap().len(), RECORDS_SIZE - 1);
-    assert_eq!(q.len(), 1);
+    assert_eq!(q.active_records(), 1);
     assert_eq!(q.shift().unwrap().len(), 1);
-    assert_eq!(q.len(), 0);
+    assert_eq!(q.active_records(), 0);
 
     assert!(!q.push(alloc_buf(1)));
   }
@@ -246,7 +253,7 @@ mod tests {
     }
 
     fn startup_shared(&mut self) -> Option<deno_buf> {
-      None
+      Some(self.q.as_deno_buf())
     }
 
     fn recv(
@@ -297,6 +304,7 @@ mod tests {
     let isolate = Isolate::new(TestBehavior::new());
     let future = lazy(move || {
       js_check(isolate.execute("shared_queue.js", js_source));
+      js_check(isolate.execute("<test>", "test()"));
       isolate.then(|r| {
         js_check(r);
         Ok(())
