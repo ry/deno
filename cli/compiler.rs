@@ -16,7 +16,6 @@ use deno::Behavior;
 use deno::Buf;
 use deno::JSError;
 use deno::Op;
-use deno::StartupData;
 use futures::future::*;
 use futures::sync::oneshot;
 use futures::Future;
@@ -75,10 +74,6 @@ impl IsolateStateContainer for &CompilerBehavior {
 }
 
 impl Behavior for CompilerBehavior {
-  fn startup_data(&mut self) -> Option<StartupData> {
-    Some(startup_data::compiler_isolate_init())
-  }
-
   fn dispatch(
     &mut self,
     control: &[u8],
@@ -138,6 +133,7 @@ fn lazy_start(parent_state: Arc<IsolateState>) -> CompilerShared {
   cell
     .get_or_insert_with(|| {
       let worker_result = workers::spawn(
+        Some(startup_data::compiler_isolate_init()),
         CompilerBehavior::new(
           parent_state.flags.clone(),
           parent_state.argv.clone(),
