@@ -4,16 +4,22 @@ use crate::errors::DenoResult;
 use crate::flags;
 use crate::global_timer::GlobalTimer;
 use crate::modules::Modules;
+use crate::ops;
 use crate::permissions::DenoPermissions;
 use crate::resources;
 use crate::resources::ResourceId;
 use crate::worker::Worker;
+use deno::deno_buf;
 use deno::Buf;
+use deno::Dispatch;
+use deno::Op;
 use futures::future::Shared;
 use std;
 use std::collections::HashMap;
 use std::env;
+use std::ops::Deref;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 use tokio::sync::mpsc as async_mpsc;
@@ -34,12 +40,16 @@ pub struct Metrics {
   pub resolve_count: AtomicUsize,
 }
 
+// TODO(ry) Rename to ThreadSafeState.
+// Wrap IsolateStateInner so that it can implement Dispatch.
+pub struct IsolateState(Arc<IsolateStateInner>);
+
 // Isolate cannot be passed between threads but IsolateState can.
 // IsolateState satisfies Send and Sync.
 // So any state that needs to be accessed outside the main V8 thread should be
 // inside IsolateState.
 #[cfg_attr(feature = "cargo-clippy", allow(stutter))]
-pub struct IsolateState {
+pub struct IsolateStateInner {
   pub dir: deno_dir::DenoDir,
   pub argv: Vec<String>,
   pub permissions: DenoPermissions,
@@ -53,6 +63,29 @@ pub struct IsolateState {
   pub resource: resources::Resource,
 }
 
+impl Clone for IsolateState {
+  fn clone(&self) -> Self {
+    Self(self.0.clone())
+  }
+}
+
+impl Deref for IsolateState {
+  type Target = Arc<IsolateStateInner>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl Dispatch for IsolateState {
+  fn dispatch(
+    &mut self,
+    control: &[u8],
+    zero_copy: deno_buf,
+  ) -> (bool, Box<Op>) {
+    ops::dispatch_all(self, control, zero_copy, ops::op_selector_std)
+  }
+}
+
 impl IsolateState {
   pub fn new(flags: flags::DenoFlags, argv_rest: Vec<String>) -> Self {
     let custom_root = env::var("DENO_DIR").map(|s| s.into()).ok();
@@ -63,7 +96,7 @@ impl IsolateState {
     let external_channels = (worker_in_tx, worker_out_rx);
     let resource = resources::add_worker(external_channels);
 
-    Self {
+    Self(Arc::new(IsolateStateInner {
       dir: deno_dir::DenoDir::new(custom_root).unwrap(),
       argv: argv_rest,
       permissions: DenoPermissions::from_flags(&flags),
@@ -75,7 +108,7 @@ impl IsolateState {
       workers: Mutex::new(UserWorkerTable::new()),
       start_time: Instant::now(),
       resource,
-    }
+    }))
   }
 
   /// Read main module from argv

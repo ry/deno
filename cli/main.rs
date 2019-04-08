@@ -13,7 +13,6 @@ extern crate deno;
 mod ansi;
 pub mod compiler;
 pub mod deno_dir;
-pub mod dispatch;
 pub mod errors;
 pub mod flags;
 mod fs;
@@ -36,7 +35,6 @@ mod tokio_write;
 pub mod version;
 pub mod worker;
 
-use crate::dispatch::CliDispatch;
 use crate::errors::RustOrJsError;
 use crate::isolate_state::IsolateState;
 use crate::worker::Worker;
@@ -44,7 +42,6 @@ use futures::lazy;
 use futures::Future;
 use log::{LevelFilter, Metadata, Record};
 use std::env;
-use std::sync::Arc;
 
 static LOGGER: Logger = Logger;
 
@@ -104,11 +101,12 @@ fn main() {
   let should_prefetch = flags.prefetch || flags.info;
   let should_display_info = flags.info;
 
-  let state = Arc::new(IsolateState::new(flags, rest_argv));
-  let state_ = state.clone();
-  let cli = CliDispatch::new(state_);
-  let mut main_worker =
-    Worker::new("main".to_string(), startup_data::deno_isolate_init(), cli);
+  let state = IsolateState::new(flags, rest_argv);
+  let mut main_worker = Worker::new(
+    "main".to_string(),
+    startup_data::deno_isolate_init(),
+    state.clone(),
+  );
 
   let main_future = lazy(move || {
     // Setup runtime.

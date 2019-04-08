@@ -1,7 +1,6 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 use crate::compiler::compile_async;
 use crate::compiler::ModuleMetaData;
-use crate::dispatch::CliDispatch;
 use crate::errors::DenoError;
 use crate::errors::RustOrJsError;
 use crate::isolate_state::IsolateState;
@@ -17,24 +16,23 @@ use futures::future::Either;
 use futures::Async;
 use futures::Future;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 /// Wraps deno::Isolate to provide source maps, ops for the CLI, and
 /// high-level module loading
 pub struct Worker {
-  inner: deno::Isolate<CliDispatch>,
-  state: Arc<IsolateState>,
+  inner: deno::Isolate<IsolateState>,
+  state: IsolateState,
 }
 
 impl Worker {
   pub fn new(
     _name: String,
     startup_data: StartupData,
-    dispatcher: CliDispatch,
+    state: IsolateState,
   ) -> Worker {
-    let state = dispatcher.state.clone();
+    let state_ = state.clone();
     Self {
-      inner: deno::Isolate::new(startup_data, dispatcher),
+      inner: deno::Isolate::new(startup_data, state_),
       state,
     }
   }
@@ -204,7 +202,7 @@ impl Future for Worker {
 }
 
 fn fetch_module_meta_data_and_maybe_compile_async(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   specifier: &str,
   referrer: &str,
 ) -> impl Future<Item = ModuleMetaData, Error = DenoError> {
@@ -239,7 +237,7 @@ fn fetch_module_meta_data_and_maybe_compile_async(
 }
 
 fn fetch_module_meta_data_and_maybe_compile(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   specifier: &str,
   referrer: &str,
 ) -> Result<ModuleMetaData, DenoError> {
@@ -251,7 +249,6 @@ fn fetch_module_meta_data_and_maybe_compile(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::dispatch::CliDispatch;
   use crate::flags;
   use crate::isolate_state::IsolateState;
   use crate::resources;
@@ -272,11 +269,11 @@ mod tests {
     let argv = vec![String::from("./deno"), filename.clone()];
     let (flags, rest_argv) = flags::set_flags(argv).unwrap();
 
-    let state = Arc::new(IsolateState::new(flags, rest_argv));
+    let state = IsolateState::new(flags, rest_argv);
     let state_ = state.clone();
     tokio_util::run(lazy(move || {
-      let cli = CliDispatch::new(state.clone());
-      let mut worker = Worker::new("TEST".to_string(), StartupData::None, cli);
+      let mut worker =
+        Worker::new("TEST".to_string(), StartupData::None, state);
       if let Err(err) = worker.execute_mod(&filename, false) {
         eprintln!("execute_mod err {:?}", err);
       }
@@ -295,11 +292,11 @@ mod tests {
     let argv = vec![String::from("./deno"), filename.clone()];
     let (flags, rest_argv) = flags::set_flags(argv).unwrap();
 
-    let state = Arc::new(IsolateState::new(flags, rest_argv));
+    let state = IsolateState::new(flags, rest_argv);
     let state_ = state.clone();
     tokio_util::run(lazy(move || {
-      let cli = CliDispatch::new(state.clone());
-      let mut worker = Worker::new("TEST".to_string(), StartupData::None, cli);
+      let mut worker =
+        Worker::new("TEST".to_string(), StartupData::None, state);
       if let Err(err) = worker.execute_mod(&filename, false) {
         eprintln!("execute_mod err {:?}", err);
       }
@@ -311,10 +308,9 @@ mod tests {
   }
 
   fn create_test_worker() -> Worker {
-    let state = Arc::new(IsolateState::mock());
-    let cli = CliDispatch::new(state.clone());
+    let state = IsolateState::mock();
     let mut worker =
-      Worker::new("TEST".to_string(), startup_data::deno_isolate_init(), cli);
+      Worker::new("TEST".to_string(), startup_data::deno_isolate_init(), state);
     js_check(worker.execute("denoMain()"));
     js_check(worker.execute("workerMain()"));
     worker

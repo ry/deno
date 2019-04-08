@@ -1,7 +1,6 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 use atty;
 use crate::ansi;
-use crate::dispatch::CliDispatch;
 use crate::errors;
 use crate::errors::{DenoError, DenoResult, ErrorKind};
 use crate::fs as deno_fs;
@@ -42,7 +41,6 @@ use std::net::Shutdown;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tokio;
 use tokio::net::TcpListener;
@@ -61,9 +59,8 @@ pub type OpWithError = dyn Future<Item = Buf, Error = DenoError> + Send;
 
 // TODO Ideally we wouldn't have to box the OpWithError being returned.
 // The box is just to make it easier to get a prototype refactor working.
-type OpCreator =
-  fn(state: &Arc<IsolateState>, base: &msg::Base<'_>, data: deno_buf)
-    -> Box<OpWithError>;
+type OpCreator = fn(state: &IsolateState, base: &msg::Base<'_>, data: deno_buf)
+  -> Box<OpWithError>;
 
 type OpSelector = fn(inner_type: msg::Any) -> Option<OpCreator>;
 
@@ -77,7 +74,7 @@ fn empty_buf() -> Buf {
 /// control corresponds to the first argument of Deno.core.dispatch().
 /// data corresponds to the second argument of Deno.core.dispatch().
 pub fn dispatch_all(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   control: &[u8],
   zero_copy: deno_buf,
   op_selector: OpSelector,
@@ -209,7 +206,7 @@ pub fn op_selector_std(inner_type: msg::Any) -> Option<OpCreator> {
 // If the High precision flag is not set, the
 // nanoseconds are rounded on 2ms.
 fn op_now(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -245,7 +242,7 @@ fn op_now(
 }
 
 fn op_is_tty(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   _data: deno_buf,
 ) -> Box<OpWithError> {
@@ -270,7 +267,7 @@ fn op_is_tty(
 }
 
 fn op_exit(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   _data: deno_buf,
 ) -> Box<OpWithError> {
@@ -279,7 +276,7 @@ fn op_exit(
 }
 
 fn op_start(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -335,7 +332,7 @@ fn op_start(
 }
 
 fn op_format_error(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -394,7 +391,7 @@ pub fn odd_future(err: DenoError) -> Box<OpWithError> {
 
 // https://github.com/denoland/deno/blob/golang/os.go#L100-L154
 fn op_fetch_module_meta_data(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -435,7 +432,7 @@ fn op_fetch_module_meta_data(
 }
 
 fn op_chdir(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -449,7 +446,7 @@ fn op_chdir(
 }
 
 fn op_global_timer_stop(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -462,7 +459,7 @@ fn op_global_timer_stop(
 }
 
 fn op_global_timer(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -495,7 +492,7 @@ fn op_global_timer(
 }
 
 fn op_set_env(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -511,7 +508,7 @@ fn op_set_env(
 }
 
 fn op_env(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -543,7 +540,7 @@ fn op_env(
 }
 
 fn op_permissions(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -573,7 +570,7 @@ fn op_permissions(
 }
 
 fn op_revoke_permission(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -596,7 +593,7 @@ fn op_revoke_permission(
 }
 
 fn op_fetch(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -683,7 +680,7 @@ where
 }
 
 fn op_make_temp_dir(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -732,7 +729,7 @@ fn op_make_temp_dir(
 }
 
 fn op_mkdir(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -754,7 +751,7 @@ fn op_mkdir(
 }
 
 fn op_chmod(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -793,7 +790,7 @@ fn op_chmod(
 }
 
 fn op_open(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -883,7 +880,7 @@ fn op_open(
 }
 
 fn op_close(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -900,7 +897,7 @@ fn op_close(
 }
 
 fn op_shutdown(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -926,7 +923,7 @@ fn op_shutdown(
 }
 
 fn op_read(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -964,7 +961,7 @@ fn op_read(
 }
 
 fn op_write(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1001,7 +998,7 @@ fn op_write(
 }
 
 fn op_seek(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1023,7 +1020,7 @@ fn op_seek(
 }
 
 fn op_remove(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1052,7 +1049,7 @@ fn op_remove(
 }
 
 fn op_copy_file(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1108,7 +1105,7 @@ fn get_mode(_perm: &fs::Permissions) -> u32 {
 }
 
 fn op_cwd(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1134,7 +1131,7 @@ fn op_cwd(
 }
 
 fn op_stat(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1186,7 +1183,7 @@ fn op_stat(
 }
 
 fn op_read_dir(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1247,7 +1244,7 @@ fn op_read_dir(
 }
 
 fn op_rename(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1267,7 +1264,7 @@ fn op_rename(
 }
 
 fn op_link(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1289,7 +1286,7 @@ fn op_link(
 }
 
 fn op_symlink(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1318,7 +1315,7 @@ fn op_symlink(
 }
 
 fn op_read_link(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1356,7 +1353,7 @@ fn op_read_link(
 }
 
 fn op_repl_start(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1387,7 +1384,7 @@ fn op_repl_start(
 }
 
 fn op_repl_readline(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1423,7 +1420,7 @@ fn op_repl_readline(
 }
 
 fn op_truncate(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1446,7 +1443,7 @@ fn op_truncate(
 }
 
 fn op_listen(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1508,7 +1505,7 @@ fn new_conn(cmd_id: u32, tcp_stream: TcpStream) -> OpResult {
 }
 
 fn op_accept(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1534,7 +1531,7 @@ fn op_accept(
 }
 
 fn op_dial(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1560,7 +1557,7 @@ fn op_dial(
 }
 
 fn op_metrics(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1584,7 +1581,7 @@ fn op_metrics(
 }
 
 fn op_resources(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1636,7 +1633,7 @@ fn subprocess_stdio_map(v: msg::ProcessStdio) -> std::process::Stdio {
 }
 
 fn op_run(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1709,7 +1706,7 @@ fn op_run(
 }
 
 fn op_run_status(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1765,7 +1762,7 @@ fn op_run_status(
 }
 
 struct GetMessageFuture {
-  pub state: Arc<IsolateState>,
+  pub state: IsolateState,
 }
 
 impl Future for GetMessageFuture {
@@ -1782,7 +1779,7 @@ impl Future for GetMessageFuture {
 
 /// Get message from host as guest worker
 fn op_worker_get_message(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1817,7 +1814,7 @@ fn op_worker_get_message(
 
 /// Post message to host as guest worker
 fn op_worker_post_message(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1847,7 +1844,7 @@ fn op_worker_post_message(
 
 /// Create worker as the host
 fn op_create_worker(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1859,16 +1856,13 @@ fn op_create_worker(
   Box::new(futures::future::result(move || -> OpResult {
     let parent_state = state.clone();
 
-    let child_state = Arc::new(IsolateState::new(
-      parent_state.flags.clone(),
-      parent_state.argv.clone(),
-    ));
+    let child_state =
+      IsolateState::new(parent_state.flags.clone(), parent_state.argv.clone());
     let rid = child_state.resource.rid;
-    let dispatcher = CliDispatch::new(child_state);
     let name = format!("USER-WORKER-{}", specifier);
 
     let mut worker =
-      Worker::new(name, startup_data::deno_isolate_init(), dispatcher);
+      Worker::new(name, startup_data::deno_isolate_init(), child_state);
     js_check(worker.execute("denoMain()"));
     js_check(worker.execute("workerMain()"));
     let result = worker.execute_mod(specifier, false);
@@ -1899,7 +1893,7 @@ fn op_create_worker(
 
 /// Return when the worker closes
 fn op_host_get_worker_closed(
-  state: &Arc<IsolateState>,
+  state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1930,7 +1924,7 @@ fn op_host_get_worker_closed(
 
 /// Get message from guest worker as host
 fn op_host_get_message(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
@@ -1964,7 +1958,7 @@ fn op_host_get_message(
 
 /// Post message to guest worker as host
 fn op_host_post_message(
-  _state: &Arc<IsolateState>,
+  _state: &IsolateState,
   base: &msg::Base<'_>,
   data: deno_buf,
 ) -> Box<OpWithError> {
