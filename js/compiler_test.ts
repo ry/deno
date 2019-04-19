@@ -374,7 +374,7 @@ function teardown(): void {
   Object.assign(compilerInstance, originals);
 }
 
-test(function testJsonEsmTemplate() {
+test(function testJsonEsmTemplate(): void {
   const result = jsonEsmTemplate(
     `{ "hello": "world", "foo": "bar" }`,
     "/foo.ts"
@@ -387,14 +387,14 @@ test(function testJsonEsmTemplate() {
   );
 });
 
-test(function compilerInstance() {
+test(function compilerInstance(): void {
   assert(Compiler != null);
   assert(Compiler.instance() != null);
 });
 
 // Testing the internal APIs
 
-test(function compilerCompile() {
+test(function compilerCompile(): void {
   // equal to `deno foo/bar.ts`
   setup();
   const moduleMetaData = compilerInstance.compile(
@@ -422,7 +422,7 @@ test(function compilerCompile() {
   teardown();
 });
 
-test(function compilerCompilerMultiModule() {
+test(function compilerCompilerMultiModule(): void {
   // equal to `deno foo/baz.ts`
   setup();
   compilerInstance.compile("foo/baz.ts", "/root/project");
@@ -431,7 +431,7 @@ test(function compilerCompilerMultiModule() {
   teardown();
 });
 
-test(function compilerLoadJsonModule() {
+test(function compilerLoadJsonModule(): void {
   setup();
   compilerInstance.compile("loadConfig.ts", "/root/project");
   assertEquals(codeFetchStack.length, 2, "Two modules fetched.");
@@ -439,7 +439,7 @@ test(function compilerLoadJsonModule() {
   teardown();
 });
 
-test(function compilerResolveModule() {
+test(function compilerResolveModule(): void {
   setup();
   const moduleMetaData = compilerInstance.resolveModule(
     "foo/baz.ts",
@@ -455,7 +455,7 @@ test(function compilerResolveModule() {
   teardown();
 });
 
-test(function compilerResolveModuleUnknownMediaType() {
+test(function compilerResolveModuleUnknownMediaType(): void {
   setup();
   let didThrow = false;
   try {
@@ -472,7 +472,7 @@ test(function compilerResolveModuleUnknownMediaType() {
   teardown();
 });
 
-test(function compilerRecompileFlag() {
+test(function compilerRecompileFlag(): void {
   setup();
   compilerInstance.compile("foo/bar.ts", "/root/project");
   assertEquals(
@@ -499,7 +499,7 @@ test(function compilerRecompileFlag() {
 
 // TypeScript LanguageServiceHost APIs
 
-test(function compilerGetCompilationSettings() {
+test(function compilerGetCompilationSettings(): void {
   const expectedKeys = [
     "allowJs",
     "checkJs",
@@ -518,12 +518,12 @@ test(function compilerGetCompilationSettings() {
   assertEquals(Object.keys(result).length, expectedKeys.length);
 });
 
-test(function compilerGetNewLine() {
+test(function compilerGetNewLine(): void {
   const result = compilerInstance.getNewLine();
   assertEquals(result, "\n", "Expected newline value of '\\n'.");
 });
 
-test(function compilerGetScriptFileNames() {
+test(function compilerGetScriptFileNames(): void {
   setup();
   compilerInstance.compile("foo/bar.ts", "/root/project");
   const result = compilerInstance.getScriptFileNames();
@@ -532,7 +532,7 @@ test(function compilerGetScriptFileNames() {
   teardown();
 });
 
-test(function compilerGetScriptKind() {
+test(function compilerGetScriptKind(): void {
   setup();
   compilerInstance.resolveModule("foo.ts", "/moduleKinds");
   compilerInstance.resolveModule("foo.d.ts", "/moduleKinds");
@@ -562,7 +562,7 @@ test(function compilerGetScriptKind() {
   teardown();
 });
 
-test(function compilerGetScriptVersion() {
+test(function compilerGetScriptVersion(): void {
   setup();
   const moduleMetaData = compilerInstance.compile(
     "foo/bar.ts",
@@ -576,7 +576,7 @@ test(function compilerGetScriptVersion() {
   teardown();
 });
 
-test(function compilerGetScriptVersionUnknown() {
+test(function compilerGetScriptVersionUnknown(): void {
   assertEquals(
     compilerInstance.getScriptVersion("/root/project/unknown_module.ts"),
     "",
@@ -584,7 +584,7 @@ test(function compilerGetScriptVersionUnknown() {
   );
 });
 
-test(function compilerGetScriptSnapshot() {
+test(function compilerGetScriptSnapshot(): void {
   setup();
   const moduleMetaData = compilerInstance.resolveModule(
     "foo/bar.ts",
@@ -610,11 +610,11 @@ test(function compilerGetScriptSnapshot() {
   teardown();
 });
 
-test(function compilerGetCurrentDirectory() {
+test(function compilerGetCurrentDirectory(): void {
   assertEquals(compilerInstance.getCurrentDirectory(), "");
 });
 
-test(function compilerGetDefaultLibFileName() {
+test(function compilerGetDefaultLibFileName(): void {
   setup();
   assertEquals(
     compilerInstance.getDefaultLibFileName(),
@@ -623,11 +623,11 @@ test(function compilerGetDefaultLibFileName() {
   teardown();
 });
 
-test(function compilerUseCaseSensitiveFileNames() {
+test(function compilerUseCaseSensitiveFileNames(): void {
   assertEquals(compilerInstance.useCaseSensitiveFileNames(), true);
 });
 
-test(function compilerReadFile() {
+test(function compilerReadFile(): void {
   let doesThrow = false;
   try {
     compilerInstance.readFile("foobar.ts");
@@ -638,7 +638,7 @@ test(function compilerReadFile() {
   assert(doesThrow);
 });
 
-test(function compilerFileExists() {
+test(function compilerFileExists(): void {
   setup();
   const moduleMetaData = compilerInstance.resolveModule(
     "foo/bar.ts",
@@ -653,7 +653,7 @@ test(function compilerFileExists() {
   teardown();
 });
 
-test(function compilerResolveModuleNames() {
+test(function compilerResolveModuleNames(): void {
   setup();
   const results = compilerInstance.resolveModuleNames(
     ["foo/bar.ts", "foo/baz.ts", "deno"],
@@ -674,7 +674,7 @@ test(function compilerResolveModuleNames() {
   teardown();
 });
 
-test(function compilerResolveEmptyFile() {
+test(function compilerResolveEmptyFile(): void {
   setup();
   const result = compilerInstance.resolveModuleNames(
     ["empty_file.ts"],
