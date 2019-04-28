@@ -6,7 +6,7 @@ void recv_cb(void* user_data, deno_buf buf, deno_buf zero_copy_buf) {
   // We use this to check that scripts have executed.
   EXPECT_EQ(1u, buf.data_len);
   EXPECT_EQ(buf.data_ptr[0], 4);
-  EXPECT_EQ(zero_copy_buf.zero_copy_id, 0u);
+  EXPECT_EQ(zero_copy_buf.zero_copy_alloc_ptr, nullptr);
   EXPECT_EQ(zero_copy_buf.data_ptr, nullptr);
   exec_count++;
 }

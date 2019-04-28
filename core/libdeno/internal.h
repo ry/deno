@@ -3,6 +3,7 @@
 #define INTERNAL_H_
 
 #include <map>
+#include <mutex>  // NOLINT
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,6 +26,60 @@ struct ModuleInfo {
   }
 };
 
+class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
+ public:
+  ~ArrayBufferAllocator() {
+    std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
+    CHECK(ref_count_map_.empty());
+  }
+
+  void* Allocate(size_t length) override { return new uint8_t[length](); }
+
+  void* AllocateUninitialized(size_t length) override {
+    return new uint8_t[length];
+  }
+
+  void Free(void* data, size_t length) override { Unref(data); }
+
+  void Ref(void* data) {
+    std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
+    auto entry = ref_count_map_.find(data);
+    if (entry == ref_count_map_.end()) {
+      // Buffers not in the map have an implicit reference count of one, so
+      // adding another reference brings it to two.
+      ref_count_map_.emplace(std::piecewise_construct, std::make_tuple(data),
+                             std::make_tuple(2));
+    } else {
+      // The buffer was already in the map; increase the reference count.
+      ++entry->second;
+    }
+  }
+
+  void Unref(void* data) {
+    {
+      std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
+      auto entry = ref_count_map_.find(data);
+      if (entry == ref_count_map_.end()) {
+        // Buffers not in the map have an implicit ref count of one. After
+        // dereferencing there are no references left, so we delete the buffer.
+      } else if (--entry->second == 0) {
+        // The reference count went to zero, so erase the map entry and free the
+        // buffer.
+        ref_count_map_.erase(entry);
+      } else {
+        // After decreasing the reference count the buffer still has references
+        // left, so we leave the allocation in place.
+        return;
+      }
+    }
+    delete[] reinterpret_cast<uint8_t*>(data);
+  }
+
+ private:
+  std::map<void*, size_t> ref_count_map_;
+  std::mutex ref_count_map_mutex_;
+};
+
 // deno_s = Wrapped Isolate.
 class DenoIsolate {
  public:
@@ -36,11 +91,9 @@ class DenoIsolate {
         snapshot_creator_(nullptr),
         global_import_buf_ptr_(nullptr),
         recv_cb_(config.recv_cb),
-        next_zero_copy_id_(1),  // zero_copy_id must not be zero.
         user_data_(nullptr),
         resolve_cb_(nullptr),
         has_snapshotted_(false) {
-    array_buffer_allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
     if (config.load_snapshot.data_ptr) {
       snapshot_.data =
           reinterpret_cast<const char*>(config.load_snapshot.data_ptr);
@@ -65,7 +118,6 @@ class DenoIsolate {
     } else {
       isolate_->Dispose();
     }
-    delete array_buffer_allocator_;
   }
 
   static inline DenoIsolate* FromIsolate(v8::Isolate* isolate) {
@@ -89,31 +141,23 @@ class DenoIsolate {
     }
   }
 
-  void DeleteZeroCopyRef(size_t zero_copy_id) {
-    DCHECK_NE(zero_copy_id, 0);
-    // Delete persistent reference to data ArrayBuffer.
-    auto it = zero_copy_map_.find(zero_copy_id);
-    if (it != zero_copy_map_.end()) {
-      it->second.Reset();
-      zero_copy_map_.erase(it);
-    }
+  void DeleteZeroCopyRef(void* zero_copy_alloc_ptr) {
+    DCHECK_NE(zero_copy_alloc_ptr, nullptr);
+    array_buffer_allocator_.Unref(zero_copy_alloc_ptr);
   }
 
-  void AddZeroCopyRef(size_t zero_copy_id, v8::Local<v8::Value> zero_copy_v) {
-    zero_copy_map_.emplace(std::piecewise_construct,
-                           std::make_tuple(zero_copy_id),
-                           std::make_tuple(isolate_, zero_copy_v));
+  void AddZeroCopyRef(void* zero_copy_alloc_ptr) {
+    array_buffer_allocator_.Ref(zero_copy_alloc_ptr);
   }
 
   v8::Isolate* isolate_;
   v8::Locker* locker_;
-  v8::ArrayBuffer::Allocator* array_buffer_allocator_;
+  ArrayBufferAllocator array_buffer_allocator_;
   deno_buf shared_;
   const v8::FunctionCallbackInfo<v8::Value>* current_args_;
   v8::SnapshotCreator* snapshot_creator_;
   void* global_import_buf_ptr_;
   deno_recv_cb recv_cb_;
-  size_t next_zero_copy_id_;
   void* user_data_;
 
   std::map<deno_mod, ModuleInfo> mods_;
@@ -121,7 +165,6 @@ class DenoIsolate {
   deno_resolve_cb resolve_cb_;
 
   v8::Persistent<v8::Context> context_;
-  std::map<size_t, v8::Persistent<v8::Value>> zero_copy_map_;
   std::map<int, v8::Persistent<v8::Value>> pending_promise_map_;
   std::string last_exception_;
   v8::Persistent<v8::Function> recv_;

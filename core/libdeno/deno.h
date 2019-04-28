@@ -11,11 +11,14 @@ extern "C" {
 
 // Data that gets transmitted.
 typedef struct {
-  uint8_t* alloc_ptr;  // Start of memory allocation (returned from `malloc()`).
+  uint8_t* alloc_ptr;  // Start of memory allocation (from `new uint8_t[len]`).
   size_t alloc_len;    // Length of the memory allocation.
   uint8_t* data_ptr;   // Start of logical contents (within the allocation).
   size_t data_len;     // Length of logical contents.
-  size_t zero_copy_id;  // 0 = normal, 1 = must call deno_zero_copy_release.
+  // If this value is value equals alloc_ptr, deno_zero_copy_release() must be
+  // called. If it's equal to nullptr, nothing needs to be done.
+  // TODO(piscisaureus): check whether we can get rid of this.
+  void* zero_copy_alloc_ptr;
 } deno_buf;
 
 typedef struct {
@@ -84,9 +87,9 @@ void deno_execute(Deno* d, void* user_data, const char* js_filename,
 void deno_respond(Deno* d, void* user_data, deno_buf buf);
 
 // consumes zero_copy
-// Calling this function more than once with the same zero_copy_id will result
-// in an error.
-void deno_zero_copy_release(Deno* d, size_t zero_copy_id);
+// Calling this function more than once with the same zero_copy_alloc_ptr will
+// result in an error.
+void deno_zero_copy_release(Deno* d, void* zero_copy_alloc_ptr);
 
 void deno_check_promise_errors(Deno* d);
 

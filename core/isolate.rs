@@ -20,7 +20,7 @@ use futures::Poll;
 use libc::c_void;
 use std::ffi::CStr;
 use std::ffi::CString;
-use std::ptr::null;
+use std::ptr::{null, null_mut};
 use std::sync::{Arc, Mutex, Once, ONCE_INIT};
 
 pub type Buf = Box<[u8]>;
@@ -28,12 +28,12 @@ pub type Op = dyn Future<Item = Buf, Error = ()> + Send;
 
 struct PendingOp {
   op: Box<Op>,
-  zero_copy_id: usize, // non-zero if associated zero-copy buffer.
+  zero_copy_alloc_ptr: *mut c_void, // non-null if associated zero-copy buffer.
 }
 
 struct OpResult {
   buf: Buf,
-  zero_copy_id: usize,
+  zero_copy_alloc_ptr: *mut c_void,
 }
 
 impl Future for PendingOp {
@@ -47,7 +47,7 @@ impl Future for PendingOp {
       NotReady => NotReady,
       Ready(buf) => Ready(OpResult {
         buf,
-        zero_copy_id: self.zero_copy_id,
+        zero_copy_alloc_ptr: self.zero_copy_alloc_ptr,
       }),
     })
   }
@@ -197,7 +197,7 @@ impl Isolate {
     zero_copy_buf: deno_buf,
   ) {
     let isolate = unsafe { Isolate::from_raw_ptr(user_data) };
-    let zero_copy_id = zero_copy_buf.zero_copy_id;
+    let zero_copy_alloc_ptr = zero_copy_buf.zero_copy_alloc_ptr;
 
     let control_shared = isolate.shared.shift();
 
@@ -235,14 +235,17 @@ impl Isolate {
       // picked up.
       let _ = isolate.respond(Some(&res_record));
     } else {
-      isolate.pending_ops.push(PendingOp { op, zero_copy_id });
+      isolate.pending_ops.push(PendingOp {
+        op,
+        zero_copy_alloc_ptr,
+      });
       isolate.have_unpolled_ops = true;
     }
   }
 
-  fn zero_copy_release(&self, zero_copy_id: usize) {
+  fn zero_copy_release(&self, zero_copy_alloc_ptr: *mut c_void) {
     unsafe {
-      libdeno::deno_zero_copy_release(self.libdeno_isolate, zero_copy_id)
+      libdeno::deno_zero_copy_release(self.libdeno_isolate, zero_copy_alloc_ptr)
     }
   }
 
@@ -470,8 +473,8 @@ impl Future for Isolate {
         Ok(Ready(None)) => break,
         Ok(NotReady) => break,
         Ok(Ready(Some(r))) => {
-          if r.zero_copy_id > 0 {
-            self.zero_copy_release(r.zero_copy_id);
+          if !r.zero_copy_alloc_ptr.is_null() {
+            self.zero_copy_release(r.zero_copy_alloc_ptr);
           }
 
           let successful_push = self.shared.push(&r.buf);

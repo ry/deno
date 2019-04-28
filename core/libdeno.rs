@@ -6,7 +6,7 @@ use libc::c_void;
 use libc::size_t;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::ptr::null;
+use std::ptr::{null, null_mut};
 
 // TODO(F001): change this definition to `extern { pub type isolate; }`
 // After RFC 1861 is stablized. See https://github.com/rust-lang/rust/issues/43467.
@@ -27,7 +27,7 @@ pub struct deno_buf {
   alloc_len: usize,
   data_ptr: *const u8,
   data_len: usize,
-  pub zero_copy_id: usize,
+  pub zero_copy_alloc_ptr: *mut c_void,
 }
 
 /// `deno_buf` can not clone, and there is no interior mutability.
@@ -42,7 +42,7 @@ impl deno_buf {
       alloc_len: 0,
       data_ptr: null(),
       data_len: 0,
-      zero_copy_id: 0,
+      zero_copy_alloc_ptr: null_mut(),
     }
   }
 
@@ -53,7 +53,7 @@ impl deno_buf {
       alloc_len: 0,
       data_ptr: ptr,
       data_len: len,
-      zero_copy_id: 0,
+      zero_copy_alloc_ptr: null_mut(),
     }
   }
 }
@@ -67,7 +67,7 @@ impl<'a> From<&'a [u8]> for deno_buf {
       alloc_len: 0,
       data_ptr: x.as_ref().as_ptr(),
       data_len: x.len(),
-      zero_copy_id: 0,
+      zero_copy_alloc_ptr: null_mut(),
     }
   }
 }
@@ -220,7 +220,10 @@ extern "C" {
     user_data: *const c_void,
     buf: deno_buf,
   );
-  pub fn deno_zero_copy_release(i: *const isolate, zero_copy_id: usize);
+  pub fn deno_zero_copy_release(
+    i: *const isolate,
+    zero_copy_alloc_ptr: *mut c_void,
+  );
   pub fn deno_execute(
     i: *const isolate,
     user_data: *const c_void,

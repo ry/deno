@@ -164,7 +164,7 @@ void ErrorToJSON(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
 v8::Local<v8::Uint8Array> ImportBuf(DenoIsolate* d, deno_buf buf) {
   // Do not use ImportBuf with zero_copy buffers.
-  DCHECK_EQ(buf.zero_copy_id, 0);
+  DCHECK_EQ(buf.zero_copy_alloc_ptr, nullptr);
 
   if (buf.data_ptr == nullptr) {
     return v8::Local<v8::Uint8Array>();
@@ -267,12 +267,10 @@ void Send(const v8::FunctionCallbackInfo<v8::Value>& args) {
       zero_copy_v = args[1];
       zero_copy = GetContents(
           isolate, v8::Local<v8::ArrayBufferView>::Cast(zero_copy_v));
-      size_t zero_copy_id = d->next_zero_copy_id_++;
-      DCHECK_GT(zero_copy_id, 0);
-      zero_copy.zero_copy_id = zero_copy_id;
+      zero_copy.zero_copy_alloc_ptr = zero_copy.alloc_ptr;
       // If the zero_copy ArrayBuffer was given, we must maintain a strong
       // reference to it until deno_zero_copy_release is called.
-      d->AddZeroCopyRef(zero_copy_id, zero_copy_v);
+      d->AddZeroCopyRef(zero_copy.zero_copy_alloc_ptr);
     }
   }
 

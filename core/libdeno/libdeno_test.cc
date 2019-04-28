@@ -43,14 +43,13 @@ TEST(LibDenoTest, ErrorsCorrectly) {
 
 deno_buf strbuf(const char* str) {
   auto len = strlen(str);
-
   deno_buf buf;
-  buf.alloc_ptr = reinterpret_cast<uint8_t*>(strdup(str));
-  buf.alloc_len = len + 1;
+  buf.alloc_ptr = new uint8_t[len];
+  buf.alloc_len = len;
   buf.data_ptr = buf.alloc_ptr;
   buf.data_len = len;
-  buf.zero_copy_id = 0;
-
+  buf.zero_copy_alloc_ptr = nullptr;
+  memcpy(buf.data_ptr, str, len);
   return buf;
 }
 
@@ -88,7 +87,7 @@ TEST(LibDenoTest, RecvReturnBar) {
     EXPECT_EQ(buf.data_ptr[0], 'a');
     EXPECT_EQ(buf.data_ptr[1], 'b');
     EXPECT_EQ(buf.data_ptr[2], 'c');
-    EXPECT_EQ(zero_copy_buf.zero_copy_id, 0u);
+    EXPECT_EQ(zero_copy_buf.zero_copy_alloc_ptr, nullptr);
     EXPECT_EQ(zero_copy_buf.data_ptr, nullptr);
     deno_respond(d, user_data, strbuf("bar"));
   };
@@ -124,7 +123,7 @@ TEST(LibDenoTest, SendRecvSlice) {
     // Make copy of the backing buffer -- this is currently necessary
     // because deno_respond() takes ownership over the buffer, but we are
     // not given ownership of `buf` by our caller.
-    uint8_t* alloc_ptr = reinterpret_cast<uint8_t*>(malloc(alloc_len));
+    uint8_t* alloc_ptr = new uint8_t[alloc_len];
     memcpy(alloc_ptr, buf.alloc_ptr, alloc_len);
     // Make a slice that is a bit shorter than the original.
     deno_buf buf2{alloc_ptr, alloc_len, alloc_ptr + data_offset,
@@ -196,7 +195,7 @@ TEST(LibDenoTest, ZeroCopyBuf) {
   static deno_buf zero_copy_buf2;
   auto recv_cb = [](auto user_data, deno_buf buf, deno_buf zero_copy_buf) {
     count++;
-    EXPECT_GT(zero_copy_buf.zero_copy_id, 0u);
+    EXPECT_NE(zero_copy_buf.zero_copy_alloc_ptr, nullptr);
     zero_copy_buf.data_ptr[0] = 4;
     zero_copy_buf.data_ptr[1] = 2;
     zero_copy_buf2 = zero_copy_buf;
@@ -208,7 +207,7 @@ TEST(LibDenoTest, ZeroCopyBuf) {
     // libdeno_test.js zeroCopyBuf is a rooted global. We just want to exercise
     // the API here.
     auto d = reinterpret_cast<Deno*>(user_data);
-    deno_zero_copy_release(d, zero_copy_buf.zero_copy_id);
+    deno_zero_copy_release(d, zero_copy_buf.zero_copy_alloc_ptr);
   };
   Deno* d = deno_new(deno_config{0, snapshot, empty, recv_cb});
   deno_execute(d, d, "a.js", "ZeroCopyBuf()");
