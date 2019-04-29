@@ -4,9 +4,13 @@ use libc::c_char;
 use libc::c_int;
 use libc::c_void;
 use libc::size_t;
+use std::convert::From;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::ptr::{null, null_mut};
+use std::option::Option;
+use std::ptr::null;
+use std::ptr::NonNull;
+use std::slice;
 
 // TODO(F001): change this definition to `extern { pub type isolate; }`
 // After RFC 1861 is stablized. See https://github.com/rust-lang/rust/issues/43467.
@@ -27,7 +31,6 @@ pub struct deno_buf {
   alloc_len: usize,
   data_ptr: *const u8,
   data_len: usize,
-  pub zero_copy_alloc_ptr: *mut c_void,
 }
 
 /// `deno_buf` can not clone, and there is no interior mutability.
@@ -42,7 +45,6 @@ impl deno_buf {
       alloc_len: 0,
       data_ptr: null(),
       data_len: 0,
-      zero_copy_alloc_ptr: null_mut(),
     }
   }
 
@@ -53,7 +55,6 @@ impl deno_buf {
       alloc_len: 0,
       data_ptr: ptr,
       data_len: len,
-      zero_copy_alloc_ptr: null_mut(),
     }
   }
 }
@@ -67,7 +68,6 @@ impl<'a> From<&'a [u8]> for deno_buf {
       alloc_len: 0,
       data_ptr: x.as_ref().as_ptr(),
       data_len: x.len(),
-      zero_copy_alloc_ptr: null_mut(),
     }
   }
 }
@@ -80,18 +80,6 @@ impl Deref for deno_buf {
   }
 }
 
-impl DerefMut for deno_buf {
-  #[inline]
-  fn deref_mut(&mut self) -> &mut [u8] {
-    unsafe {
-      if self.alloc_ptr.is_null() {
-        panic!("Can't modify the buf");
-      }
-      std::slice::from_raw_parts_mut(self.data_ptr as *mut u8, self.data_len)
-    }
-  }
-}
-
 impl AsRef<[u8]> for deno_buf {
   #[inline]
   fn as_ref(&self) -> &[u8] {
@@ -99,15 +87,90 @@ impl AsRef<[u8]> for deno_buf {
   }
 }
 
-impl AsMut<[u8]> for deno_buf {
-  #[inline]
+#[repr(C)]
+pub struct PinnedBufRaw {
+  data_ptr: *mut u8,
+  data_len: usize,
+  pin: PinnedBufPinRaw,
+}
+
+#[repr(C)]
+pub struct PinnedBufPinRaw {
+  ptr: *mut c_void,
+}
+
+#[repr(C)]
+pub struct PinnedBuf {
+  data_ptr: NonNull<u8>,
+  data_len: usize,
+  pin: PinnedBufPin,
+}
+
+#[repr(C)]
+pub struct PinnedBufPin {
+  ptr: NonNull<c_void>,
+}
+
+unsafe impl Send for PinnedBufRaw {}
+unsafe impl Send for PinnedBuf {}
+
+impl PinnedBuf {
+  pub fn new(raw: PinnedBufRaw) -> Option<Self> {
+    let PinnedBufRaw {
+      data_ptr,
+      data_len,
+      pin,
+    } = raw;
+    NonNull::new(data_ptr).map(|data_ptr| PinnedBuf {
+      data_ptr,
+      data_len,
+      pin: PinnedBufPin::new(pin).unwrap(),
+    })
+  }
+}
+
+impl Deref for PinnedBuf {
+  type Target = [u8];
+  fn deref(&self) -> &[u8] {
+    unsafe { slice::from_raw_parts(self.data_ptr.as_ptr(), self.data_len) }
+  }
+}
+
+impl DerefMut for PinnedBuf {
+  fn deref_mut(&mut self) -> &mut [u8] {
+    unsafe { slice::from_raw_parts_mut(self.data_ptr.as_ptr(), self.data_len) }
+  }
+}
+
+impl AsRef<[u8]> for PinnedBuf {
+  fn as_ref(&self) -> &[u8] {
+    &*self
+  }
+}
+
+impl AsMut<[u8]> for PinnedBuf {
   fn as_mut(&mut self) -> &mut [u8] {
-    if self.alloc_ptr.is_null() {
-      panic!("Can't modify the buf");
-    }
     &mut *self
   }
 }
+
+impl PinnedBufPin {
+  fn new(raw: PinnedBufPinRaw) -> Option<PinnedBufPin> {
+    NonNull::new(raw.ptr).map(|ptr| PinnedBufPin { ptr })
+  }
+}
+
+impl Drop for PinnedBufPin {
+  fn drop(&mut self) {
+    unsafe {
+      let raw = &mut *(self as *mut PinnedBufPin as *mut PinnedBufPinRaw);
+      deno_zero_copy_release(raw);
+    }
+  }
+}
+
+pub use PinnedBufPinRaw as deno_pin_buf_pin;
+pub use PinnedBufRaw as deno_pinned_buf;
 
 #[repr(C)]
 pub struct deno_snapshot<'a> {
@@ -156,7 +219,7 @@ impl Snapshot2<'_> {
 type deno_recv_cb = unsafe extern "C" fn(
   user_data: *mut c_void,
   control_buf: deno_buf, // deprecated
-  zero_copy_buf: deno_buf,
+  zero_copy_buf: deno_pinned_buf,
 );
 
 #[allow(non_camel_case_types)]
@@ -220,10 +283,7 @@ extern "C" {
     user_data: *const c_void,
     buf: deno_buf,
   );
-  pub fn deno_zero_copy_release(
-    i: *const isolate,
-    zero_copy_alloc_ptr: *mut c_void,
-  );
+  pub fn deno_zero_copy_release(pin: &mut deno_pin_buf_pin);
   pub fn deno_execute(
     i: *const isolate,
     user_data: *const c_void,

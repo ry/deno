@@ -3,10 +3,11 @@
 #define INTERNAL_H_
 
 #include <map>
-#include <mutex>  // NOLINT
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "buffer.h"
 #include "deno.h"
 #include "third_party/v8/include/v8.h"
 #include "third_party/v8/src/base/logging.h"
@@ -24,60 +25,6 @@ struct ModuleInfo {
       : main(main_), name(name_), import_specifiers(import_specifiers_) {
     handle.Reset(isolate, module);
   }
-};
-
-class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
- public:
-  ~ArrayBufferAllocator() {
-    std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
-    CHECK(ref_count_map_.empty());
-  }
-
-  void* Allocate(size_t length) override { return new uint8_t[length](); }
-
-  void* AllocateUninitialized(size_t length) override {
-    return new uint8_t[length];
-  }
-
-  void Free(void* data, size_t length) override { Unref(data); }
-
-  void Ref(void* data) {
-    std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
-    auto entry = ref_count_map_.find(data);
-    if (entry == ref_count_map_.end()) {
-      // Buffers not in the map have an implicit reference count of one, so
-      // adding another reference brings it to two.
-      ref_count_map_.emplace(std::piecewise_construct, std::make_tuple(data),
-                             std::make_tuple(2));
-    } else {
-      // The buffer was already in the map; increase the reference count.
-      ++entry->second;
-    }
-  }
-
-  void Unref(void* data) {
-    {
-      std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
-      auto entry = ref_count_map_.find(data);
-      if (entry == ref_count_map_.end()) {
-        // Buffers not in the map have an implicit ref count of one. After
-        // dereferencing there are no references left, so we delete the buffer.
-      } else if (--entry->second == 0) {
-        // The reference count went to zero, so erase the map entry and free the
-        // buffer.
-        ref_count_map_.erase(entry);
-      } else {
-        // After decreasing the reference count the buffer still has references
-        // left, so we leave the allocation in place.
-        return;
-      }
-    }
-    delete[] reinterpret_cast<uint8_t*>(data);
-  }
-
- private:
-  std::map<void*, size_t> ref_count_map_;
-  std::mutex ref_count_map_mutex_;
 };
 
 // deno_s = Wrapped Isolate.
@@ -141,18 +88,8 @@ class DenoIsolate {
     }
   }
 
-  void DeleteZeroCopyRef(void* zero_copy_alloc_ptr) {
-    DCHECK_NE(zero_copy_alloc_ptr, nullptr);
-    array_buffer_allocator_.Unref(zero_copy_alloc_ptr);
-  }
-
-  void AddZeroCopyRef(void* zero_copy_alloc_ptr) {
-    array_buffer_allocator_.Ref(zero_copy_alloc_ptr);
-  }
-
   v8::Isolate* isolate_;
   v8::Locker* locker_;
-  ArrayBufferAllocator array_buffer_allocator_;
   deno_buf shared_;
   const v8::FunctionCallbackInfo<v8::Value>* current_args_;
   v8::SnapshotCreator* snapshot_creator_;
@@ -220,7 +157,7 @@ static intptr_t external_references[] = {
     reinterpret_cast<intptr_t>(MessageCallback),
     0};
 
-static const deno_buf empty_buf = {nullptr, 0, nullptr, 0, 0};
+static const deno_buf empty_buf = {nullptr, 0, nullptr, 0};
 static const deno_snapshot empty_snapshot = {nullptr, 0};
 
 Deno* NewFromSnapshot(void* user_data, deno_recv_cb cb);

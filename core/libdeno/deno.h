@@ -1,13 +1,20 @@
 // Copyright 2018-2019 the Deno authors. All rights reserved. MIT license.
 #ifndef DENO_H_
 #define DENO_H_
+
 #include <stddef.h>
 #include <stdint.h>
+
+#include "buffer.h"
+
 // Neither Rust nor Go support calling directly into C++ functions, therefore
 // the public interface to libdeno is done in C.
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef deno::PinnedBuf::Raw deno_pinned_buf;
+typedef deno::PinnedBufPin::Raw deno_pinned_buf_pin;
 
 // Data that gets transmitted.
 typedef struct {
@@ -15,10 +22,6 @@ typedef struct {
   size_t alloc_len;    // Length of the memory allocation.
   uint8_t* data_ptr;   // Start of logical contents (within the allocation).
   size_t data_len;     // Length of logical contents.
-  // If this value is value equals alloc_ptr, deno_zero_copy_release() must be
-  // called. If it's equal to nullptr, nothing needs to be done.
-  // TODO(piscisaureus): check whether we can get rid of this.
-  void* zero_copy_alloc_ptr;
 } deno_buf;
 
 typedef struct {
@@ -32,7 +35,7 @@ typedef struct deno_s Deno;
 // control_buf is valid for only for the lifetime of this callback.
 // data_buf is valid until deno_respond() is called.
 typedef void (*deno_recv_cb)(void* user_data, deno_buf control_buf,
-                             deno_buf zerop_copy_buf);
+                             deno_pinned_buf zero_copy_buf);
 
 void deno_init();
 const char* deno_v8_version();
@@ -87,9 +90,7 @@ void deno_execute(Deno* d, void* user_data, const char* js_filename,
 void deno_respond(Deno* d, void* user_data, deno_buf buf);
 
 // consumes zero_copy
-// Calling this function more than once with the same zero_copy_alloc_ptr will
-// result in an error.
-void deno_zero_copy_release(Deno* d, void* zero_copy_alloc_ptr);
+void deno_zero_copy_release(deno_pinned_buf_pin* pin);
 
 void deno_check_promise_errors(Deno* d);
 
