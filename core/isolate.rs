@@ -20,6 +20,7 @@ use futures::Poll;
 use libc::c_void;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::mem::replace;
 use std::ptr::{null, null_mut};
 use std::sync::{Arc, Mutex, Once, ONCE_INIT};
 
@@ -109,6 +110,16 @@ unsafe impl Send for Isolate {}
 
 impl Drop for Isolate {
   fn drop(&mut self) {
+    let zero_copy_bufs = self
+      .pending_ops
+      .iter_mut()
+      .filter(|op| !op.zero_copy_alloc_ptr.is_null())
+      .map(|op| replace(&mut op.zero_copy_alloc_ptr, null_mut()))
+      .collect::<Vec<_>>();
+    zero_copy_bufs
+      .into_iter()
+      .for_each(|i| self.zero_copy_release(i));
+
     // remove shared_libdeno_isolate reference
     *self.shared_libdeno_isolate.lock().unwrap() = None;
 
