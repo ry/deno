@@ -233,6 +233,9 @@ impl Isolate {
       // return value.
       // TODO(ry) check that if JSError thrown during respond(), that it will be
       // picked up.
+      if !zero_copy_alloc_ptr.is_null() {
+        isolate.zero_copy_release(zero_copy_alloc_ptr);
+      }
       let _ = isolate.respond(Some(&res_record));
     } else {
       isolate.pending_ops.push(PendingOp {
