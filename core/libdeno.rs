@@ -87,32 +87,27 @@ impl AsRef<[u8]> for deno_buf {
   }
 }
 
-#[repr(C)]
-pub struct PinnedBufRaw {
-  data_ptr: *mut u8,
-  data_len: usize,
-  pin: PinnedBufPinRaw,
-}
-
-#[repr(C)]
-pub struct PinnedBufPinRaw {
-  ptr: *mut c_void,
-}
-
+/// A PinnedBuf encapsulates a slice that's been borrowed from a JavaScript
+/// ArrayBuffer object. JavaScript objects can normally be garbage collected,
+/// but the existence of a PinnedBuf inhibits this until it is dropped.
+/// It behaves much like an Arc<&'static mut [u8]>, although a PinnedBuf
+/// currently can't be cloned.
 #[repr(C)]
 pub struct PinnedBuf {
   data_ptr: NonNull<u8>,
   data_len: usize,
-  pin: PinnedBufPin,
+  pin: NonNull<c_void>,
 }
 
 #[repr(C)]
-pub struct PinnedBufPin {
-  ptr: NonNull<c_void>,
+pub struct PinnedBufRaw {
+  data_ptr: *mut u8,
+  data_len: usize,
+  pin: *mut c_void,
 }
 
-unsafe impl Send for PinnedBufRaw {}
 unsafe impl Send for PinnedBuf {}
+unsafe impl Send for PinnedBufRaw {}
 
 impl PinnedBuf {
   pub fn new(raw: PinnedBufRaw) -> Option<Self> {
@@ -124,8 +119,17 @@ impl PinnedBuf {
     NonNull::new(data_ptr).map(|data_ptr| PinnedBuf {
       data_ptr,
       data_len,
-      pin: PinnedBufPin::new(pin).unwrap(),
+      pin: NonNull::new(pin).unwrap(),
     })
+  }
+}
+
+impl Drop for PinnedBuf {
+  fn drop(&mut self) {
+    unsafe {
+      let raw = &mut *(self as *mut PinnedBuf as *mut PinnedBufRaw);
+      deno_pinned_buf_delete(raw);
+    }
   }
 }
 
@@ -154,22 +158,6 @@ impl AsMut<[u8]> for PinnedBuf {
   }
 }
 
-impl PinnedBufPin {
-  fn new(raw: PinnedBufPinRaw) -> Option<PinnedBufPin> {
-    NonNull::new(raw.ptr).map(|ptr| PinnedBufPin { ptr })
-  }
-}
-
-impl Drop for PinnedBufPin {
-  fn drop(&mut self) {
-    unsafe {
-      let raw = &mut *(self as *mut PinnedBufPin as *mut PinnedBufPinRaw);
-      deno_zero_copy_release(raw);
-    }
-  }
-}
-
-pub use PinnedBufPinRaw as deno_pin_buf_pin;
 pub use PinnedBufRaw as deno_pinned_buf;
 
 #[repr(C)]
@@ -283,7 +271,7 @@ extern "C" {
     user_data: *const c_void,
     buf: deno_buf,
   );
-  pub fn deno_zero_copy_release(pin: &mut deno_pin_buf_pin);
+  pub fn deno_pinned_buf_delete(buf: &mut deno_pinned_buf);
   pub fn deno_execute(
     i: *const isolate,
     user_data: *const c_void,

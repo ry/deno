@@ -14,7 +14,6 @@ extern "C" {
 #endif
 
 typedef deno::PinnedBuf::Raw deno_pinned_buf;
-typedef deno::PinnedBufPin::Raw deno_pinned_buf_pin;
 
 // Data that gets transmitted.
 typedef struct {
@@ -90,7 +89,7 @@ void deno_execute(Deno* d, void* user_data, const char* js_filename,
 void deno_respond(Deno* d, void* user_data, deno_buf buf);
 
 // consumes zero_copy
-void deno_zero_copy_release(deno_pinned_buf_pin* pin);
+void deno_pinned_buf_delete(deno_pinned_buf* buf);
 
 void deno_check_promise_errors(Deno* d);
 

@@ -44,12 +44,10 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
     return new uint8_t[length];
   }
 
-  void Free(void* data, size_t length) override {
-    Unref(reinterpret_cast<uint8_t*>(data));
-  }
+  void Free(void* data, size_t length) override { Unref(data); }
 
  private:
-  friend class PinnedBufPin;
+  friend class PinnedBuf;
 
   void Ref(void* data) {
     std::lock_guard<std::mutex> lock(ref_count_map_mutex_);
@@ -96,55 +94,56 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
   std::mutex ref_count_map_mutex_;
 };
 
-class PinnedBufPin {
-  struct AutoDeref {
+class PinnedBuf {
+  struct Unref {
+    // This callback gets called from the Pin destructor.
     void operator()(void* ptr) { ArrayBufferAllocator::global().Unref(ptr); }
   };
-  std::unique_ptr<void, AutoDeref> ptr_;
+  // The Pin is a unique (non-copyable) smart pointer which automatically
+  // unrefs the referenced ArrayBuffer in its destructor.
+  using Pin = std::unique_ptr<void, Unref>;
 
- public:
-  struct Raw {
-    void* ptr;
-  };
-
-  PinnedBufPin() : ptr_(nullptr) {}
-  explicit PinnedBufPin(void* ptr) : ptr_(ptr) {
-    ArrayBufferAllocator::global().Ref(ptr);
-  }
-  explicit PinnedBufPin(Raw raw) { *this = BitMove<PinnedBufPin>(&raw); }
-  Raw AsRaw() { return BitMove<Raw>(this); }
-};
-
-class PinnedBuf {
   uint8_t* data_ptr_;
   size_t data_len_;
-  PinnedBufPin pin_;
+  Pin pin_;
 
  public:
+  // PinnedBuf::Raw is a POD struct with the same memory layout as the PinBuf
+  // itself. It is used to move a PinnedBuf between C and Rust.
   struct Raw {
     uint8_t* data_ptr;
     size_t data_len;
-    PinnedBufPin::Raw pin;
+    void* pin;
   };
 
   PinnedBuf() : data_ptr_(nullptr), data_len_(0), pin_() {}
 
   explicit PinnedBuf(v8::Local<v8::ArrayBufferView> view) {
     auto buf = view->Buffer()->GetContents().Data();
+    ArrayBufferAllocator::global().Ref(buf);
+
     data_ptr_ = reinterpret_cast<uint8_t*>(buf) + view->ByteOffset();
     data_len_ = view->ByteLength();
-    pin_ = PinnedBufPin(buf);
+    pin_ = Pin(buf);
   }
 
+  // This constructor recreates a PinnedBuf that has previously been converted
+  // to a PinnedBuf::Raw using the AsRaw() method. This is a move operation;
+  // the Raw struct is emptied in the process.
   explicit PinnedBuf(Raw raw)
       : data_ptr_(BitMove(&raw.data_ptr)),
         data_len_(BitMove(&raw.data_len)),
-        pin_(raw.pin) {}
+        pin_(BitMove<Pin>(&raw.pin)) {}
 
+  // The AsRaw() method converts the PinnedBuf to a PinnedBuf::Raw so it's
+  // ownership can be moved to Rust. The source PinnedBuf is emptied in the
+  // process, but the pinned ArrayBuffer is not dereferenced. In order to
+  // not leak it, the raw struct must eventually be turned back into a PinnedBuf
+  // using the constructor above.
   Raw AsRaw() {
     return Raw{.data_ptr = BitMove(&data_ptr_),
                .data_len = BitMove(&data_len_),
-               .pin = pin_.AsRaw()};
+               .pin = BitMove<void*>(&pin_)};
   }
 };
 

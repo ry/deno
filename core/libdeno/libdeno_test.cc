@@ -53,9 +53,9 @@ deno_buf strbuf(const char* str) {
 }
 
 void assert_null(deno_pinned_buf b) {
-  EXPECT_EQ(b.pin.ptr, nullptr);
   EXPECT_EQ(b.data_ptr, nullptr);
   EXPECT_EQ(b.data_len, 0u);
+  EXPECT_EQ(b.pin, nullptr);
 }
 
 TEST(LibDenoTest, RecvReturnEmpty) {
@@ -192,7 +192,7 @@ TEST(LibDenoTest, ZeroCopyBuf) {
   auto recv_cb = [](auto user_data, deno_buf buf,
                     deno_pinned_buf zero_copy_buf) {
     count++;
-    EXPECT_NE(zero_copy_buf.pin.ptr, nullptr);
+    EXPECT_NE(zero_copy_buf.pin, nullptr);
     zero_copy_buf.data_ptr[0] = 4;
     zero_copy_buf.data_ptr[1] = 2;
     zero_copy_buf2 = zero_copy_buf;
@@ -203,7 +203,7 @@ TEST(LibDenoTest, ZeroCopyBuf) {
     // Note zero_copy_buf won't actually be freed here because in
     // libdeno_test.js zeroCopyBuf is a rooted global. We just want to exercise
     // the API here.
-    deno_zero_copy_release(&zero_copy_buf.pin);
+    deno_pinned_buf_delete(&zero_copy_buf);
   };
   Deno* d = deno_new(deno_config{0, snapshot, empty, recv_cb});
   deno_execute(d, d, "a.js", "ZeroCopyBuf()");

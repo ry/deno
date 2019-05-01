@@ -148,9 +148,9 @@ void deno_execute(Deno* d_, void* user_data, const char* js_filename,
   deno::Execute(context, js_filename, js_source);
 }
 
-void deno_zero_copy_release(deno_pinned_buf_pin* buf) {
-  // The Pin destructor implicitly releases the ArrayBuffer reference.
-  auto _ = deno::PinnedBufPin(*buf);
+void deno_pinned_buf_delete(deno_pinned_buf* buf) {
+  // The PinnedBuf destructor implicitly releases the ArrayBuffer reference.
+  auto _ = deno::PinnedBuf(*buf);
 }
 
 void deno_respond(Deno* d_, void* user_data, deno_buf buf) {
@@ -185,8 +185,6 @@ void deno_respond(Deno* d_, void* user_data, deno_buf buf) {
   v8::Local<v8::Value> args[1];
   int argc = 0;
 
-  // You cannot use zero_copy_buf with deno_respond(). Use
-  // deno_zero_copy_release() instead.
   if (buf.data_ptr != nullptr) {
     args[0] = deno::ImportBuf(d, buf);
     argc = 1;
