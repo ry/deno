@@ -15,22 +15,6 @@
 
 namespace deno {
 
-template <typename T, typename S>
-static inline T BitMove(S* source) {
-  static_assert(sizeof(T) == sizeof(S),
-                "Source and target must have the same size.");
-  static const auto empty = T();
-  T moved;
-  memcpy(&moved, source, sizeof(T));
-  memcpy(source, &empty, sizeof(T));
-  return moved;
-}
-
-template <typename T>
-static inline T BitMove(T* source) {
-  return BitMove<T, T>(source);
-}
-
 class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
  public:
   static ArrayBufferAllocator& global() {
@@ -131,9 +115,10 @@ class PinnedBuf {
   // to a PinnedBuf::Raw using the AsRaw() method. This is a move operation;
   // the Raw struct is emptied in the process.
   explicit PinnedBuf(Raw raw)
-      : data_ptr_(BitMove(&raw.data_ptr)),
-        data_len_(BitMove(&raw.data_len)),
-        pin_(BitMove<Pin>(&raw.pin)) {}
+      : data_ptr_(raw.data_ptr), data_len_(raw.data_len), pin_(raw.pin) {
+    raw.data_ptr = nullptr;
+    raw.data_len = 0;
+  }
 
   // The AsRaw() method converts the PinnedBuf to a PinnedBuf::Raw so it's
   // ownership can be moved to Rust. The source PinnedBuf is emptied in the
@@ -141,9 +126,11 @@ class PinnedBuf {
   // not leak it, the raw struct must eventually be turned back into a PinnedBuf
   // using the constructor above.
   Raw AsRaw() {
-    return Raw{.data_ptr = BitMove(&data_ptr_),
-               .data_len = BitMove(&data_len_),
-               .pin = BitMove<void*>(&pin_)};
+    auto r = Raw{
+        .data_ptr = data_ptr_, .data_len = data_len_, .pin = pin_.release()};
+    data_ptr_ = nullptr;
+    data_len_ = 0;
+    return r;
   }
 };
 
