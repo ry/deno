@@ -25,6 +25,7 @@ pub struct DenoFlags {
   pub allow_run: bool,
   pub allow_hrtime: bool,
   pub no_prompts: bool,
+  pub debugger: bool,
   pub no_fetch: bool,
   pub v8_flags: Option<Vec<String>>,
   pub xeval_replvar: Option<String>,
@@ -248,6 +249,11 @@ ability to spawn subprocesses.
           Arg::with_name("no-prompt")
             .long("no-prompt")
             .help("Do not use prompts"),
+        ).arg(
+          Arg::with_name("debugger")
+            .short("d")
+            .long("debugger")
+            .help("Run the debugger"),
         ).subcommand(
           // this is a fake subcommand - it's used in conjunction with
           // AppSettings:AllowExternalSubcommand to treat it as an
@@ -401,6 +407,9 @@ pub fn parse_flags(matches: ArgMatches) -> DenoFlags {
     }
     if run_matches.is_present("no-prompt") {
       flags.no_prompts = true;
+    }
+    if run_matches.is_present("debugger") {
+      flags.debugger = true;
     }
   }
 

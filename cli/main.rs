@@ -15,6 +15,7 @@ extern crate rand;
 
 mod ansi;
 pub mod compiler;
+mod debugger;
 pub mod deno_dir;
 mod dispatch_minimal;
 pub mod errors;
@@ -157,7 +158,13 @@ fn create_worker_and_state(
       eprintln!();
     }
   });
+
+  if flags.debugger {
+    debugger::spawn();
+  }
+
   let state = ThreadSafeState::new(flags, argv, ops::op_selector_std, progress);
+
   let worker = Worker::new(
     "main".to_string(),
     startup_data::deno_isolate_init(),
@@ -274,10 +281,11 @@ fn run_repl(flags: DenoFlags, argv: Vec<String>) {
   tokio_util::run(main_future);
 }
 
-fn run_script(flags: DenoFlags, argv: Vec<String>) {
+fn run_command(flags: DenoFlags, argv: Vec<String>) {
   let (mut worker, state) = create_worker_and_state(flags, argv);
 
   let main_module = state.main_module().unwrap();
+
   // Normal situation of executing a module.
   let main_future = lazy(move || {
     // Setup runtime.
@@ -321,7 +329,7 @@ fn main() {
     DenoSubcommand::Fetch => fetch_or_info_command(flags, argv, false),
     DenoSubcommand::Info => fetch_or_info_command(flags, argv, true),
     DenoSubcommand::Repl => run_repl(flags, argv),
-    DenoSubcommand::Run => run_script(flags, argv),
+    DenoSubcommand::Run => run_command(flags, argv),
     DenoSubcommand::Types => types_command(),
     DenoSubcommand::Version => run_repl(flags, argv),
     DenoSubcommand::Xeval => xeval_command(flags, argv),
