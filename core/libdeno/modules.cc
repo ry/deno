@@ -152,7 +152,10 @@ void deno_mod_evaluate(Deno* d_, void* user_data, deno_mod id) {
 }
 
 void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
-                     deno_mod mod_id) {
+                     deno_mod mod_id, const char* error_str) {
+  CHECK((mod_id == 0 && error_str != nullptr) ||
+        (mod_id != 0 && error_str == nullptr));
+
   auto* d = unwrap(d_);
   deno::UserDataScope user_data_scope(d, user_data);
 
@@ -183,7 +186,9 @@ void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
 
   if (info == nullptr) {
     // Resolution error.
-    promise->Reject(context, v8::Null(isolate)).ToChecked();
+    auto msg = deno::v8_str(error_str);
+    auto exception = v8::Exception::TypeError(msg);
+    promise->Reject(context, exception).ToChecked();
   } else {
     // Resolution success
     Local<Module> module = info->handle.Get(isolate);

@@ -158,7 +158,7 @@ TEST(ModulesTest, DynamicImportSuccess) {
     dyn_import_count++;
     EXPECT_STREQ(specifier, "foo");
     EXPECT_STREQ(referrer, "a.js");
-    deno_dyn_import(d, d, import_id, b);
+    deno_dyn_import(d, d, import_id, b, nullptr);
   };
   const char* src =
       "(async () => { \n"
@@ -198,7 +198,7 @@ TEST(ModulesTest, DynamicImportError) {
     EXPECT_STREQ(specifier, "foo");
     EXPECT_STREQ(referrer, "a.js");
     // We indicate there was an error resolving by returning mod_id 0.
-    deno_dyn_import(d, d, import_id, 0);
+    deno_dyn_import(d, d, import_id, 0, "foo not found");
   };
   const char* src =
       "(async () => { \n"
@@ -217,7 +217,11 @@ TEST(ModulesTest, DynamicImportError) {
   EXPECT_EQ(nullptr, deno_last_exception(d));
   // Now we should get an error.
   deno_check_promise_errors(d);
+
   EXPECT_NE(deno_last_exception(d), nullptr);
+  std::string e(deno_last_exception(d));
+  EXPECT_NE(e.find("Uncaught TypeError: foo not found"), std::string::npos);
+
   deno_delete(d);
   EXPECT_EQ(0, exec_count);
   EXPECT_EQ(1, dyn_import_count);
@@ -276,7 +280,7 @@ TEST(ModulesTest, DynamicImportAsync) {
   auto import_id = import_ids.back();
   import_ids.pop_back();
 
-  deno_dyn_import(d, d, import_id, b);
+  deno_dyn_import(d, d, import_id, b, nullptr);
 
   EXPECT_EQ(nullptr, deno_last_exception(d));
   deno_check_promise_errors(d);
@@ -288,7 +292,7 @@ TEST(ModulesTest, DynamicImportAsync) {
 
   import_id = import_ids.back();
   import_ids.pop_back();
-  deno_dyn_import(d, d, import_id, b);
+  deno_dyn_import(d, d, import_id, b, nullptr);
 
   EXPECT_EQ(nullptr, deno_last_exception(d));
   deno_check_promise_errors(d);

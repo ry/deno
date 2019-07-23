@@ -127,8 +127,12 @@ void deno_mod_evaluate(Deno* d, void* user_data, deno_mod id);
 
 // Call exactly once for every deno_dyn_import_cb.
 // Note this call will execute JS.
+// Either mod_id is zero and error_str is not null OR mod_id is valid and
+// error_str is null.
+// TODO(ry) The errors arising from dynamic import are not exactly the same as
+// those arising from ops in Deno.
 void deno_dyn_import(Deno* d, void* user_data, deno_dyn_import_id id,
-                     deno_mod mod_id);
+                     deno_mod mod_id, const char* error_str);
 
 #ifdef __cplusplus
 }  // extern "C"
