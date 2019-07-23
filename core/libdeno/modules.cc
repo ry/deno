@@ -166,10 +166,6 @@ void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
   auto context = d->context_.Get(d->isolate_);
   v8::Context::Scope context_scope(context);
 
-  // deno::ResetLastException(isolate);
-
-  v8::TryCatch try_catch(isolate);
-
   auto it = d->dyn_import_map_.find(import_id);
   if (it == d->dyn_import_map_.end()) {
     CHECK(false);  // TODO(ry) error on bad import_id.
@@ -211,12 +207,6 @@ void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
   CHECK_GE(module->GetStatus(), v8::Module::kEvaluated);
   Local<Value> module_namespace = module->GetModuleNamespace();
   promise->Resolve(context, module_namespace).ToChecked();
-
-  /*
-  if (try_catch.HasCaught()) {
-    HandleException(context, try_catch.Exception());
-  }
-  */
 }
 
 }  // extern "C"
