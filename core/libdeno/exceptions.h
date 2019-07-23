@@ -15,6 +15,7 @@ std::string EncodeExceptionAsJSON(v8::Local<v8::Context> context,
 
 void HandleException(v8::Local<v8::Context> context,
                      v8::Local<v8::Value> exception);
+void ResetLastException(v8::Isolate* isolate);
 
 void HandleExceptionMessage(v8::Local<v8::Context> context,
                             v8::Local<v8::Message> message);

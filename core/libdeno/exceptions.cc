@@ -200,6 +200,15 @@ void HandleException(v8::Local<v8::Context> context,
   std::string json_str = EncodeExceptionAsJSON(context, exception);
   CHECK_NOT_NULL(d);
   d->last_exception_ = json_str;
+  d->last_exception_handle_.Reset(isolate, exception);
+  ;
+}
+
+void ResetLastException(v8::Isolate* isolate) {
+  DenoIsolate* d = DenoIsolate::FromIsolate(isolate);
+  CHECK_NOT_NULL(d);
+  d->last_exception_ = std::string();
+  d->last_exception_handle_.Reset();
 }
 
 void HandleExceptionMessage(v8::Local<v8::Context> context,

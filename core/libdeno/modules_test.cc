@@ -179,6 +179,10 @@ TEST(ModulesTest, DynamicImportSuccess) {
   EXPECT_EQ(nullptr, deno_last_exception(d));
   deno_mod_instantiate(d, d, b, nullptr);
   EXPECT_EQ(nullptr, deno_last_exception(d));
+
+  deno_mod_evaluate(d, d, b);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+
   deno_mod_evaluate(d, d, a);
   EXPECT_EQ(nullptr, deno_last_exception(d));
   deno_check_promise_errors(d);
@@ -274,6 +278,8 @@ TEST(ModulesTest, DynamicImportAsync) {
   EXPECT_EQ(nullptr, deno_last_exception(d));
   deno_mod_instantiate(d, d, b, nullptr);
   EXPECT_EQ(nullptr, deno_last_exception(d));
+  deno_mod_evaluate(d, d, b);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
 
   // Now we resolve the import.
   EXPECT_EQ(1u, import_ids.size());
@@ -301,6 +307,120 @@ TEST(ModulesTest, DynamicImportAsync) {
   // We still have to resolve the second one
   EXPECT_EQ(2, dyn_import_count);
   EXPECT_EQ(1, exec_count);
+
+  deno_delete(d);
+}
+
+TEST(ModulesTest, DynamicImportThrows) {
+  exec_count = 0;
+  static int dyn_import_count = 0;
+  static deno_mod b = 0;
+  static std::vector<deno_dyn_import_id> import_ids = {};
+  auto dyn_import_cb = [](auto user_data, const char* specifier,
+                          const char* referrer, deno_dyn_import_id import_id) {
+    // auto d = reinterpret_cast<Deno*>(user_data);
+    dyn_import_count++;
+    EXPECT_STREQ(specifier, "b.js");
+    EXPECT_STREQ(referrer, "a.js");
+    // We don't call deno_dyn_import until later.
+    import_ids.push_back(import_id);
+  };
+  const char* src =
+      "(async () => { \n"
+      "  let mod = await import('b.js'); \n"
+      // unreachable
+      "  Deno.core.send(new Uint8Array([4])); \n"
+      "})(); \n";
+  Deno* d = deno_new(deno_config{0, snapshot, empty, recv_cb, dyn_import_cb});
+  static deno_mod a = deno_mod_new(d, true, "a.js", src);
+  EXPECT_NE(a, 0);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+  deno_mod_instantiate(d, d, a, nullptr);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+
+  // Evaluate. We check that there are no errors, and Deno.core.send has not
+  // been called.
+  deno_mod_evaluate(d, d, a);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+  deno_check_promise_errors(d);
+  EXPECT_EQ(deno_last_exception(d), nullptr);
+  EXPECT_EQ(0, exec_count);
+  EXPECT_EQ(1, dyn_import_count);
+
+  // Instantiate b.js
+  const char* b_src = " throw new Error('foo')";
+  b = deno_mod_new(d, false, "b.js", b_src);
+  EXPECT_NE(b, 0);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+  deno_mod_instantiate(d, d, b, nullptr);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+
+  deno_mod_evaluate(d, d, b);
+  EXPECT_NE(deno_last_exception(d), nullptr);
+
+  // Now we resolve the import.
+  EXPECT_EQ(1u, import_ids.size());
+  auto import_id = import_ids.back();
+  import_ids.pop_back();
+
+  EXPECT_EQ(0, exec_count);
+
+  deno_dyn_import(d, d, import_id, b, nullptr);
+
+  deno_check_promise_errors(d);
+
+  EXPECT_NE(deno_last_exception(d), nullptr);
+  std::string e(deno_last_exception(d));
+  EXPECT_NE(e.find("Uncaught Error: foo"), std::string::npos);
+
+  EXPECT_EQ(1, dyn_import_count);
+  EXPECT_EQ(0, exec_count);
+
+  deno_delete(d);
+}
+
+TEST(ModulesTest, DynamicImportSyntaxError) {
+  exec_count = 0;
+  static int dyn_import_count = 0;
+  static std::vector<deno_dyn_import_id> import_ids = {};
+  auto dyn_import_cb = [](auto user_data, const char* specifier,
+                          const char* referrer, deno_dyn_import_id import_id) {
+    auto d = reinterpret_cast<Deno*>(user_data);
+    dyn_import_count++;
+    EXPECT_STREQ(specifier, "b.js");
+    EXPECT_STREQ(referrer, "a.js");
+
+    deno_mod b = deno_mod_new(d, false, "b.js", "syntax error");
+    EXPECT_EQ(b, 0);
+    EXPECT_NE(nullptr, deno_last_exception(d));
+
+    deno_dyn_import(d, d, import_id, 0, nullptr);
+  };
+  const char* src =
+      "(async () => { \n"
+      "  let mod = await import('b.js'); \n"
+      // unreachable
+      "  Deno.core.send(new Uint8Array([4])); \n"
+      "})(); \n";
+  Deno* d = deno_new(deno_config{0, snapshot, empty, recv_cb, dyn_import_cb});
+  static deno_mod a = deno_mod_new(d, true, "a.js", src);
+  EXPECT_NE(a, 0);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+  deno_mod_instantiate(d, d, a, nullptr);
+  EXPECT_EQ(nullptr, deno_last_exception(d));
+
+  // Evaluate. We check that there are no errors, and Deno.core.send has not
+  // been called.
+  deno_mod_evaluate(d, d, a);
+
+  // EXPECT_EQ(nullptr, deno_last_exception(d));
+  // deno_check_promise_errors(d);
+  EXPECT_NE(deno_last_exception(d), nullptr);
+  std::string e(deno_last_exception(d));
+  EXPECT_NE(e.find("Syntax"), std::string::npos);
+
+  EXPECT_EQ(1, dyn_import_count);
+  EXPECT_EQ(0, exec_count);
 
   deno_delete(d);
 }

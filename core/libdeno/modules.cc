@@ -153,10 +153,10 @@ void deno_mod_evaluate(Deno* d_, void* user_data, deno_mod id) {
 
 void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
                      deno_mod mod_id, const char* error_str) {
-  CHECK((mod_id == 0 && error_str != nullptr) ||
-        (mod_id != 0 && error_str == nullptr));
-
   auto* d = unwrap(d_);
+  CHECK((mod_id == 0 && error_str != nullptr) ||
+        (mod_id != 0 && error_str == nullptr) ||
+        (mod_id == 0 && !d->last_exception_handle_.IsEmpty()));
   deno::UserDataScope user_data_scope(d, user_data);
 
   auto* isolate = d->isolate_;
@@ -165,6 +165,8 @@ void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
   v8::HandleScope handle_scope(isolate);
   auto context = d->context_.Get(d->isolate_);
   v8::Context::Scope context_scope(context);
+
+  // deno::ResetLastException(isolate);
 
   v8::TryCatch try_catch(isolate);
 
@@ -185,21 +187,36 @@ void deno_dyn_import(Deno* d_, void* user_data, deno_dyn_import_id import_id,
   d->dyn_import_map_.erase(it);
 
   if (info == nullptr) {
-    // Resolution error.
-    auto msg = deno::v8_str(error_str);
-    auto exception = v8::Exception::TypeError(msg);
-    promise->Reject(context, exception).ToChecked();
-  } else {
-    // Resolution success
-    Local<Module> module = info->handle.Get(isolate);
-    CHECK_GE(module->GetStatus(), v8::Module::kInstantiated);
-    Local<Value> module_namespace = module->GetModuleNamespace();
-    promise->Resolve(context, module_namespace).ToChecked();
+    if (error_str != nullptr) {
+      // Resolution error.
+      auto msg = deno::v8_str(error_str);
+      auto exception = v8::Exception::TypeError(msg);
+      promise->Reject(context, exception).ToChecked();
+    } else {
+      auto e = d->last_exception_handle_.Get(isolate);
+      promise->Reject(context, e).ToChecked();
+    }
+    return;
   }
 
+  // Resolution success
+  Local<Module> module = info->handle.Get(isolate);
+
+  if (module->GetStatus() == v8::Module::Status::kErrored) {
+    auto e = module->GetException();
+    promise->Reject(context, e).ToChecked();
+    return;
+  }
+
+  CHECK_GE(module->GetStatus(), v8::Module::kEvaluated);
+  Local<Value> module_namespace = module->GetModuleNamespace();
+  promise->Resolve(context, module_namespace).ToChecked();
+
+  /*
   if (try_catch.HasCaught()) {
     HandleException(context, try_catch.Exception());
   }
+  */
 }
 
 }  // extern "C"
