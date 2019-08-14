@@ -72,7 +72,7 @@ fn test_parse_min_record() {
   assert_eq!(parse_min_record(&buf), None);
 }
 
-pub fn dispatch_minimal(
+pub fn dispatch(
   state: &ThreadSafeState,
   op_id: OpId,
   mut record: Record,

@@ -8,7 +8,6 @@ use crate::ops::serialize_response;
 use crate::ops::CliOpResult;
 use crate::resources;
 use crate::state::ThreadSafeState;
-use crate::tokio_write;
 use deno::*;
 use flatbuffers::FlatBufferBuilder;
 use futures::Future;
