@@ -56,15 +56,20 @@ jobs:
           GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
         run: python ./tools/setup.py
 
-      - name: Start sccache (linux)
+      - name: add prebuilt to path (linux)
         if: startsWith(matrix.os, 'ubuntu')
-        run: "`pwd`/prebuilt/linux64/sccache --start-server"
-      - name: Start sccache (macos)
+        run: export PATH=`pwd`/prebuild/linux64/:$PATH
+
+      - name: add prebuilt to path (macos)
         if: startsWith(matrix.os, 'macos')
-        run: "`pwd`/prebuilt/mac/sccache --start-server"
-      - name: Start sccache (windows)
+        run: export PATH=`pwd`/prebuild/mac/:$PATH
+
+      - name: add prebuilt to path (win)
         if: startsWith(matrix.os, 'windows')
-        run: "%cd%\\prebuilt\\win\\sccache.exe --start-server"
+        run: export PATH=`pwd`/prebuild/win/:$PATH
+
+      - name: Start sccache
+        run: sccache --start-server
 
       - name: tools/lint.py
         run: python ./tools/lint.py
@@ -75,9 +80,11 @@ jobs:
       - name: cargo build
         env:
           DENO_BUILD_MODE: release
-          GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
-        run: |
-          cargo build --release --locked --all-targets
+          AWS_ACCESS_KEY_ID: AKIAIVRN52PLDBP55LBQ
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_BUCKET: deno-sccache
+          RUSTC_WRAPPER: sccache
+        run: cargo build --release --locked --all-targets
 
       - name: clippy
         run: cargo clippy --all-targets --release --locked -- -D clippy::all
