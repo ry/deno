@@ -2,7 +2,7 @@ import os
 import sys
 
 from test_util import DenoTestCase, run_tests
-from util import executable_suffix, tests_path, run, run_output
+from util import build_mode, executable_suffix, tests_path, run, run_output
 
 
 class TestTarget(DenoTestCase):
@@ -23,8 +23,7 @@ class TestTarget(DenoTestCase):
 
     def test_cargo_test(self):
         cargo_test = ["cargo", "test", "--all", "--locked"]
-        if "DENO_BUILD_MODE" in os.environ and \
-          os.environ["DENO_BUILD_MODE"] == "release":
+        if build_mode() == "release":
             run(cargo_test + ["--release"])
         else:
             run(cargo_test)
