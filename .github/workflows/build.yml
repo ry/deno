@@ -58,6 +58,10 @@ jobs:
           echo ::add-path::prebuilt/win
           echo ::add-path::prebuilt/mac
           echo ::add-path::prebuilt/linux64
+          
+      - name: print env
+        run: |
+          env
 
       - name: tools/setup.py
         #env:
