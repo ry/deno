@@ -78,25 +78,10 @@ jobs:
         run: python ./tools/test_format.py
 
       - name: cargo build
-        run: cargo build --release --locked --all-targets
-
-      - name: clippy
-        run: cargo clippy --all-targets --release --locked -- -D clippy::all
+        run: cargo build -vv --release --locked --all-targets
 
       - name: test
         run: python ./tools/test.py
 
-      # Upload artifacts
-      - name: Upload artifacts (unix)
-        uses: actions/upload-artifact@master
-        if: startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'macOS')
-        with:
-          name: deno_${{matrix.os}}
-          path: target/release/deno
-      - name: Upload artifacts (windows)
-        uses: actions/upload-artifact@master
-        if: startsWith(matrix.os, 'windows')
-        with:
-          name: deno_${{matrix.os}}.exe
-          path: target\release\deno.exe
-
+      - name: clippy
+        run: cargo clippy --all-targets --release --locked -- -D clippy::all
