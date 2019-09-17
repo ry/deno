@@ -1,0 +1,74 @@
+name: Benchmark updating
+
+on: [push]
+
+jobs:
+  update_benchmark:
+    name: Update benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout the repository
+        uses: actions/checkout@v1
+        with:
+          submodules: true
+
+      # Setup compilers
+      - name: Setup rust
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: "1.37.0"
+      - name: Setup python
+        uses: actions/setup-python@v1
+        with:
+          python-version: "2.7.16"
+          architecture: x64
+      - name: Check versions
+        run: |
+          python --version
+          rustc --version
+          cargo --version
+
+      # Setup
+      - name: Run setup script
+        run: ./tools/setup.py
+
+      # Start sscache
+      - name: Start sccache
+        run: "`pwd`/prebuilt/linux64/sccache --start-server"
+
+      # Building
+      - name: Run build script
+        env:
+          DENO_BUILD_MODE: release
+        run: |
+          cargo build --release --locked --all-targets
+
+      # Run benchmarks
+      - name: Run benchmarks
+        run: |
+          ./tools/benchmark.py target/release
+
+      - name: Copy benchmarks
+        run: cp -r website/* gh-pages/
+
+      # Upload benchmarks
+      - name: Compress benchmarks
+        run: zip gh-pages.zip gh-pages/**
+      - name: Upload benchmarks as artifact
+        uses: actions/upload-artifact@master
+        with:
+          name: benchmarks
+          path: gh-pages.zip
+
+      # Push to pages
+      - name: Push to pages
+        if: (github.ref == 'master' || github.ref == 'github-ci')
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          cd gh-pages
+          git add .
+          git commit --message "Update benchmarks"
+          git push origin gh-pages
+          curl -XPOST -H 'Accept: application/vnd.github.mister-fantastic-preview+json' -H 'Authorization: token $GH_PAT' 'https://api.github.com/repos/$GITHUB_REPOSITORY/pages/builds/latest'
