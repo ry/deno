@@ -58,7 +58,7 @@ jobs:
 
       - name: add prebuilt to path
         run: |
-          echo ::add-path::`pwd`/prebuilt/win
+          echo ::add-path::prebuilt/win
           echo ::add-path::`pwd`/prebuilt/mac
           echo ::add-path::`pwd`/prebuilt/linux64
 
