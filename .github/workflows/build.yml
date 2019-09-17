@@ -40,9 +40,25 @@ jobs:
           python-version: "2.7.16"
           architecture: x64
 
-      - name: Setup python package dir
+      - name: set up environment (common)
+        run: |
+          echo ::set-env name=RUSTC_WRAPPER::sccache
+          echo ::set-env name=DENO_BUILD_MODE::release
+
+      - name: set up environment (linux)
+        if: startsWith(matrix.os, 'linux')
+        run: |
+          echo ::add-path::`pwd`\prebuilt\linux64
+
+      - name: set up environment (mac)
+        if: startsWith(matrix.os, 'macOS')
+        run: |
+          echo ::add-path::`pwd`/prebuilt/mac
+
+      - name: set up environment (windows)
         if: startsWith(matrix.os, 'windows')
-        run: set PYTHONPATH=third_party\python_packages
+        run: |
+          echo ::add-path::%cd%/prebuilt/win
 
       - name: print versions
         run: |
@@ -51,14 +67,6 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: setup env
-        run: |
-          echo ::set-env name=RUSTC_WRAPPER::sccache
-          echo ::set-env name=DENO_BUILD_MODE::release
-          echo ::add-path::prebuilt/win
-          echo ::add-path::prebuilt/mac
-          echo ::add-path::prebuilt/linux64
-          
       - name: print env
         run: |
           env
