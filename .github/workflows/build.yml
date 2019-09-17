@@ -60,8 +60,8 @@ jobs:
           echo ::add-path::prebuilt/linux64
 
       - name: tools/setup.py
-        env:
-          GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
+        #env:
+        #  GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
         run: python ./tools/setup.py
 
       - name: Start sccache
