@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Checkout submodules
-      uses: textbook/git-checkout-submodule-action@2.0.0
+      uses: git submodule update --init --recursive --depth=1
     - name: Build
       run: cargo build --verbose
     - name: Run tests
