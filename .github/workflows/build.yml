@@ -51,18 +51,23 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: tools/setup.py
-        env:
-          GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
-        run: python ./tools/setup.py
-
-      - name: add prebuilt to path
+      - name: setup env
         run: |
+          echo ::set-env name=RUSTC_WRAPPER::sccache
+          echo ::set-env name=DENO_BUILD_MODE::release
+          echo ::set-env name=GYP_MSVS_OVERRIDE_PATH::C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
           echo ::add-path::prebuilt/win
           echo ::add-path::`pwd`/prebuilt/mac
           echo ::add-path::`pwd`/prebuilt/linux64
 
+      - name: tools/setup.py
+        run: python ./tools/setup.py
+
       - name: Start sccache
+        env:
+          AWS_ACCESS_KEY_ID: AKIAIVRN52PLDBP55LBQ
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_BUCKET: deno-sccache
         run: sccache --start-server
 
       - name: tools/lint.py
@@ -72,21 +77,12 @@ jobs:
         run: python ./tools/test_format.py
 
       - name: cargo build
-        env:
-          DENO_BUILD_MODE: release
-          AWS_ACCESS_KEY_ID: AKIAIVRN52PLDBP55LBQ
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SCCACHE_BUCKET: deno-sccache
-          RUSTC_WRAPPER: sccache
         run: cargo build --release --locked --all-targets
 
       - name: clippy
         run: cargo clippy --all-targets --release --locked -- -D clippy::all
 
       - name: test
-        env:
-          GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
-          DENO_BUILD_MODE: release
         run: python ./tools/test.py
 
       # Upload artifacts
