@@ -10,70 +10,64 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-2016, macOS-latest]
     steps:
-      - name: Enable symlinks
+      - name: Configure git
         run: git config --global core.symlinks true
 
-      - name: Checkout the repository
+      - name: Clone repository
         uses: actions/checkout@v1
         with:
           fetch-depth: 1
           submodules: true
 
-      - name: install node
+      - name: Install node.js
         uses: actions/setup-node@v1
         with:
           node-version: "12.x"
 
-      - name: install rust
+      - name: Install rust
         uses: hecrj/setup-rust-action@v1
         with:
           rust-version: "1.37.0"
 
-      - name: install clippy and rustfmt
+      - name: Install clippy and rustfmt
         run: |
           rustup component add clippy
           rustup component add rustfmt
 
-      - name: install python
+      - name: Install python
         uses: actions/setup-python@v1
         with:
           python-version: "2.7.16"
           architecture: x64
 
-      - name: set up environment (common)
+      - name: Environment (common)
         run: |
           echo ::set-env name=RUSTC_WRAPPER::sccache
           echo ::set-env name=DENO_BUILD_MODE::release
 
-      - name: set up environment (linux)
+      - name: Environment (linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           echo ::add-path::`pwd`/prebuilt/linux64
 
-      - name: set up environment (mac)
+      - name: Environment (mac)
         if: startsWith(matrix.os, 'macOS')
         run: |
           echo ::add-path::`pwd`/prebuilt/mac
 
-      - name: set up environment (windows)
+      - name: Environment (windows)
         if: startsWith(matrix.os, 'windows')
         run: |
           echo ::add-path::%cd%\prebuilt\win
 
-      - name: print versions
+      - name: Log versions
         run: |
           node -v
           python --version
           rustc --version
           cargo --version
 
-      - name: print env
-        run: |
-          env
-
-      - name: tools/setup.py
-        #env:
-        #  GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
+      - name: Run setup.py
         run: python ./tools/setup.py
 
       - name: Start sccache
@@ -81,19 +75,22 @@ jobs:
           AWS_ACCESS_KEY_ID: AKIAIVRN52PLDBP55LBQ
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           SCCACHE_BUCKET: deno-sccache
+          SCCACHE_IDLE_TIMEOUT: 0
         run: sccache --start-server
 
-      - name: tools/lint.py
-        run: python ./tools/lint.py
+      - name: Lint
+        run: |
+          python ./tools/lint.py
+          python ./tools/test_format.py
 
-      - name: tools/test_format.py
-        run: python ./tools/test_format.py
-
-      - name: cargo build
+      - name: Build
         run: cargo build -vv --release --locked --all-targets
 
-      - name: test
+      - name: Test
         run: python ./tools/test.py
 
-      - name: clippy
+      - name: Clippy
         run: cargo clippy --all-targets --release --locked -- -D clippy::all
+
+      - name: Stop sccache
+        run: sccache --stop-server
