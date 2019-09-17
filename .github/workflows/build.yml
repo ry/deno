@@ -48,7 +48,7 @@ jobs:
       - name: set up environment (linux)
         if: startsWith(matrix.os, 'linux')
         run: |
-          echo ::add-path::`pwd`\prebuilt\linux64
+          echo ::add-path::`pwd`/prebuilt/linux64
 
       - name: set up environment (mac)
         if: startsWith(matrix.os, 'macOS')
@@ -58,7 +58,7 @@ jobs:
       - name: set up environment (windows)
         if: startsWith(matrix.os, 'windows')
         run: |
-          echo ::add-path::%cd%/prebuilt/win
+          echo ::add-path::%cd%\prebuilt\win
 
       - name: print versions
         run: |
