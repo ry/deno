@@ -9,6 +9,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - name: Checkout submodules
+      uses: textbook/git-checkout-submodule-action@2.0.0
     - name: thing
       run: /home/runner/work/deno/deno/third_party/depot_tools/cipd init /home/runner/work/deno/deno/core/libdeno/buildtools/linux64 -force
     - name: Build
