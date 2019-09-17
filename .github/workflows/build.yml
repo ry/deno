@@ -56,17 +56,11 @@ jobs:
           GYP_MSVS_OVERRIDE_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise
         run: python ./tools/setup.py
 
-      - name: add prebuilt to path (linux)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: echo ::add-path::`pwd`/prebuilt/linux64
-
-      - name: add prebuilt to path (macos)
-        if: startsWith(matrix.os, 'macos')
-        run: echo ::add-path::`pwd`/prebuilt/mac
-
-      - name: add prebuilt to path (win)
-        if: startsWith(matrix.os, 'windows')
-        run: echo ::add-path::`pwd`/prebuilt/win
+      - name: add prebuilt to path
+        run: |
+          echo ::add-path::`pwd`/prebuilt/win
+          echo ::add-path::`pwd`/prebuilt/mac
+          echo ::add-path::`pwd`/prebuilt/linux64
 
       - name: Start sccache
         run: sccache --start-server
