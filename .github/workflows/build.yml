@@ -58,15 +58,15 @@ jobs:
 
       - name: add prebuilt to path (linux)
         if: startsWith(matrix.os, 'ubuntu')
-        run: export PATH=`pwd`/prebuild/linux64/:$PATH
+        run: export PATH=`pwd`/prebuilt/linux64/:$PATH
 
       - name: add prebuilt to path (macos)
         if: startsWith(matrix.os, 'macos')
-        run: export PATH=`pwd`/prebuild/mac/:$PATH
+        run: export PATH=`pwd`/prebuilt/mac/:$PATH
 
       - name: add prebuilt to path (win)
         if: startsWith(matrix.os, 'windows')
-        run: export PATH=`pwd`/prebuild/win/:$PATH
+        run: export PATH=`pwd`/prebuilt/win/:$PATH
 
       - name: Start sccache
         run: sccache --start-server
