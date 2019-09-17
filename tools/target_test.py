@@ -48,11 +48,16 @@ class TestTarget(DenoTestCase):
             "tests/exec_path.ts"
         ]
         result = run_output(cmd, quiet=True)
-        print "exec_path", result.code
-        print result.out
-        print result.err
-        assert self.deno_exe in result.out.strip()
+        print "exec_path", result
         self.assertEqual(result.code, 0)
+        if os.name == "nt":
+            # When running in github actions, the windows drive letter of the
+            # executable path reported by deno has a different case than the one
+            # reported by python.
+            assert self.deno_exe.upper() in result.out.strip().upper()
+            assert self.deno_exe[1:] in result.out.strip()
+        else:
+            assert self.deno_exe in result.out.strip()
 
 
 if __name__ == "__main__":
