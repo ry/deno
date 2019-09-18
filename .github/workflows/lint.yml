@@ -41,7 +41,7 @@ jobs:
         run: python ./tools/lint.py
 
       - name: test_format.py
-        run: python ./tools/lint.py
+        run: python ./tools/test_format.py
 
       - name: Clippy
         run: cargo clippy --all-targets --release --locked -- -D clippy::all
