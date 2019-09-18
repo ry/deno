@@ -25,6 +25,7 @@ jobs:
         run: |
           echo ::set-env name=RUSTC_WRAPPER::sccache
           echo ::set-env name=DENO_BUILD_MODE::release
+          echo ::add-path::`pwd`/prebuilt/linux64
 
       - name: Run setup.py
         run: python ./tools/setup.py
