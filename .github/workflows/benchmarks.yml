@@ -1,10 +1,10 @@
-name: Benchmark updating
+name: Benchmarks
 
 on: [push]
 
 jobs:
-  update_benchmark:
-    name: Update benchmarks
+  benchmarks:
+    name: Benchmarks
     runs-on: ubuntu-latest
     steps:
       - name: Configure git
@@ -42,18 +42,8 @@ jobs:
       - name: Copy benchmarks
         run: cp -r website/* gh-pages/
 
-      # Upload benchmarks
-      - name: Compress benchmarks
-        run: zip gh-pages.zip gh-pages/**
-      - name: Upload benchmarks as artifact
-        uses: actions/upload-artifact@master
-        with:
-          name: benchmarks
-          path: gh-pages.zip
-
-      # Push to pages
       - name: Push to pages
-        if: (github.ref == 'master' || github.ref == 'github-ci')
+        if: (github.ref == 'master' || github.ref == 'github-actions')
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
@@ -61,4 +51,3 @@ jobs:
           git add .
           git commit --message "Update benchmarks"
           git push origin gh-pages
-          curl -XPOST -H 'Accept: application/vnd.github.mister-fantastic-preview+json' -H 'Authorization: token $GH_PAT' 'https://api.github.com/repos/$GITHUB_REPOSITORY/pages/builds/latest'
