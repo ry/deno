@@ -29,11 +29,6 @@ jobs:
         with:
           rust-version: "1.37.0"
 
-      - name: Install clippy and rustfmt
-        run: |
-          rustup component add clippy
-          rustup component add rustfmt
-
       - name: Install python
         uses: actions/setup-python@v1
         with:
@@ -78,19 +73,11 @@ jobs:
           SCCACHE_IDLE_TIMEOUT: 0
         run: sccache --start-server
 
-      - name: Lint
-        run: |
-          python ./tools/lint.py
-          python ./tools/test_format.py
-
       - name: Build
         run: cargo build -vv --release --locked --all-targets
 
       - name: Test
         run: python ./tools/test.py
-
-      - name: Clippy
-        run: cargo clippy --all-targets --release --locked -- -D clippy::all
 
       - name: Stop sccache
         run: sccache --stop-server

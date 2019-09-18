@@ -7,10 +7,13 @@ jobs:
     name: Update benchmarks
     runs-on: ubuntu-latest
     steps:
-      # Checkout the repository
-      - name: Checkout the repository
+      - name: Configure git
+        run: git config --global core.symlinks true
+
+      - name: Clone repository
         uses: actions/checkout@v1
         with:
+          fetch-depth: 1
           submodules: true
 
       # Setup compilers

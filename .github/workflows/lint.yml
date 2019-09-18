@@ -1,0 +1,31 @@
+name: lint
+
+on: [push]
+
+jobs:
+  clippy:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure git
+        run: git config --global core.symlinks true
+
+      - name: Clone repository
+        uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Install clippy and rustfmt
+        run: |
+          rustup component add clippy
+          rustup component add rustfmt
+
+      - name: lint.py
+        run: python ./tools/lint.py
+
+      - name: test_format.py
+        run: python ./tools/lint.py
+
+      - name: Clippy
+        run: cargo clippy --all-targets --release --locked -- -D clippy::all
