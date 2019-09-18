@@ -19,11 +19,6 @@ jobs:
           fetch-depth: 1
           submodules: true
 
-      - name: Install node.js
-        uses: actions/setup-node@v1
-        with:
-          node-version: "12.x"
-
       - name: Install rust
         uses: hecrj/setup-rust-action@v1
         with:
