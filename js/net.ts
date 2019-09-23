@@ -44,7 +44,7 @@ function shutdown(rid: number, how: ShutdownMode): void {
   sendSync(dispatch.OP_SHUTDOWN, { rid, how });
 }
 
-class ConnImpl implements Conn {
+export class ConnImpl implements Conn {
   constructor(
     readonly rid: number,
     readonly remoteAddr: string,
@@ -187,16 +187,6 @@ const dialDefaults = { hostname: "127.0.0.1", transport: "tcp" };
 export async function dial(options: DialOptions): Promise<Conn> {
   options = Object.assign(dialDefaults, options);
   const res = await sendAsync(dispatch.OP_DIAL, options);
-  return new ConnImpl(res.rid, res.remoteAddr!, res.localAddr!);
-}
-
-/** DialTls connects to the address on the named transport over TLS.
- *
- * Support the same options as `dial`.
- */
-export async function dialTls(options: DialOptions): Promise<Conn> {
-  options = Object.assign(dialDefaults, options);
-  const res = await sendAsync(dispatch.OP_DIAL_TLS, options);
   return new ConnImpl(res.rid, res.remoteAddr!, res.localAddr!);
 }
 

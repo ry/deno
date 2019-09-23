@@ -20,6 +20,7 @@ mod random;
 mod repl;
 mod resources;
 mod timers;
+mod tls;
 mod workers;
 
 // Warning! These values are duplicated in the TypeScript code (js/dispatch.ts),
@@ -302,7 +303,7 @@ pub fn dispatch(
       zero_copy,
     ),
     OP_DIAL_TLS => {
-      dispatch_json::dispatch(net::op_dial_tls, state, control, zero_copy)
+      dispatch_json::dispatch(tls::op_dial_tls, state, control, zero_copy)
     }
     _ => panic!("bad op_id"),
   };
