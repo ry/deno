@@ -134,6 +134,13 @@ fn create_worker_and_state(
   (worker, global_state)
 }
 
+fn test_command(flags: DenoFlags, argv: Vec<String>) {
+  println!("deno test");
+  println!("argv {:?}", argv);
+  println!("flags {:?}", flags);
+  unimplemented!()
+}
+
 fn types_command() {
   let content = crate::js::get_asset("lib.deno_runtime.d.ts").unwrap();
   println!("{}", content);
@@ -442,6 +449,7 @@ pub fn main() {
     DenoSubcommand::Repl => run_repl(flags, argv),
     DenoSubcommand::Run => run_script(flags, argv),
     DenoSubcommand::Types => types_command(),
+    DenoSubcommand::Test => test_command(flags, argv),
     DenoSubcommand::Version => version_command(),
   }
 }

@@ -23,8 +23,6 @@ macro_rules! std_url {
 const PRETTIER_URL: &str = std_url!("prettier/main.ts");
 /// Used for `deno install...` subcommand
 const INSTALLER_URL: &str = std_url!("installer/mod.ts");
-/// Used for `deno test...` subcommand
-const TEST_RUNNER_URL: &str = std_url!("testing/runner.ts");
 /// Used for `deno xeval...` subcommand
 const XEVAL_URL: &str = std_url!("xeval/mod.ts");
 
@@ -132,8 +130,8 @@ pub fn create_cli_app<'a, 'b>() -> App<'a, 'b> {
     .after_help(ENV_VARIABLES_HELP)
     .long_about("A secure JavaScript and TypeScript runtime
 
-Docs: https://deno.land/manual.html
-Modules: https://deno.land/x/
+Website: https://deno.land/
+Docs: https://deno.land/std/manual.md
 Bugs: https://github.com/denoland/deno/issues
 
 To run the REPL:
@@ -350,11 +348,12 @@ Automatically downloads Prettier dependencies on first run.
       add_run_args(SubCommand::with_name("test"))
         .about("Run tests")
         .long_about(
-"Run tests using test runner
+"Run tests
 
-Automatically downloads test runner on first run.
+This command executes files matching *_test.ts and *_test.js in the given
+directory. For example to run the tests in the current directory:
 
-  deno test **/*_test.ts **/test.ts",
+  deno test .",
         ).arg(
           Arg::with_name("failfast")
             .short("f")
@@ -789,6 +788,7 @@ pub enum DenoSubcommand {
   Info,
   Repl,
   Run,
+  Test,
   Types,
   Version,
 }
@@ -928,38 +928,14 @@ pub fn flags_from_vec(
       }
     }
     ("test", Some(test_match)) => {
-      flags.allow_read = true;
-      argv.push(TEST_RUNNER_URL.to_string());
-
-      if test_match.is_present("quiet") {
-        argv.push("--quiet".to_string());
+      if test_match.args.get("failfast").is_some() {
+        unimplemented!();
       }
-
-      if test_match.is_present("failfast") {
-        argv.push("--failfast".to_string());
+      if test_match.args.get("quiet").is_some() {
+        unimplemented!();
       }
-
-      if test_match.is_present("exclude") {
-        argv.push("--exclude".to_string());
-        let exclude: Vec<String> = test_match
-          .values_of("exclude")
-          .unwrap()
-          .map(String::from)
-          .collect();
-        argv.extend(exclude);
-      }
-
-      if test_match.is_present("files") {
-        argv.push("--".to_string());
-        let files: Vec<String> = test_match
-          .values_of("files")
-          .unwrap()
-          .map(String::from)
-          .collect();
-        argv.extend(files);
-      }
-
-      DenoSubcommand::Run
+      println!("test_match {:?}", test_match);
+      DenoSubcommand::Test
     }
     ("types", Some(_)) => DenoSubcommand::Types,
     ("run", Some(run_match)) => {
@@ -1863,24 +1839,8 @@ mod tests {
       "some_dir/",
       "**/*_test.ts"
     ]);
-    assert_eq!(
-      flags,
-      DenoFlags {
-        allow_read: true,
-        ..DenoFlags::default()
-      }
-    );
-    assert_eq!(subcommand, DenoSubcommand::Run);
-    assert_eq!(
-      argv,
-      svec![
-        "deno",
-        TEST_RUNNER_URL,
-        "--exclude",
-        "some_dir/",
-        "**/*_test.ts"
-      ]
-    )
+    assert_eq!(flags, DenoFlags::default());
+    assert_eq!(subcommand, DenoSubcommand::Test);
   }
 
   #[test]
