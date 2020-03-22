@@ -56,7 +56,7 @@ interface ConnectResponse {
 
 export type ConnectRequest = NetAddr | UnixAddr;
 
-export async function connect(args: ConnectRequest): Promise<ConnectResponse> {
+export function connect(args: ConnectRequest): Promise<ConnectResponse> {
   return sendAsync("op_connect", args);
 }
 
@@ -65,7 +65,7 @@ interface ReceiveResponse {
   remoteAddr: NetAddr | UnixAddr;
 }
 
-export async function receive(
+export function receive(
   rid: number,
   transport: string,
   zeroCopy: Uint8Array
