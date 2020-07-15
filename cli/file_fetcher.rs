@@ -57,7 +57,7 @@ impl SourceFileCache {
   }
 }
 
-const SUPPORTED_URL_SCHEMES: [&str; 3] = ["http", "https", "file"];
+const SUPPORTED_URL_SCHEMES: [&str; 4] = ["http", "https", "file", "builtin"];
 
 #[derive(Clone)]
 pub struct SourceFileFetcher {

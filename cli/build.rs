@@ -1,10 +1,18 @@
 // Copyright 2018-2020 the Deno authors. All rights reserved. MIT license.
+#![allow(warnings)]
+
 use deno_core::include_crate_modules;
+use deno_core::js_check;
 use deno_core::CoreIsolate;
+use deno_core::ErrBox;
+use deno_core::ModuleLoader;
+use deno_core::ModuleSourceFuture;
+use deno_core::ModuleSpecifier;
 use deno_core::StartupData;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::pin::Pin;
 
 fn main() {
   // Don't build V8 if "cargo doc" is being run. This is to support docs.rs.
@@ -31,74 +39,48 @@ fn main() {
   let o = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
   // Main snapshot
-  let root_names = vec![c.join("js/main.ts")];
-  let bundle_path = o.join("CLI_SNAPSHOT.js");
+  //let bundle_path = o.join("CLI_SNAPSHOT.js");
   let snapshot_path = o.join("CLI_SNAPSHOT.bin");
 
-  let main_module_name = deno_typescript::compile_bundle(
-    &bundle_path,
-    root_names,
-    Some(extern_crate_modules.clone()),
-  )
-  .expect("Bundle compilation failed");
-  assert!(bundle_path.exists());
+  let loader = std::rc::Rc::new(Loader {});
+  let mut isolate = deno_core::EsIsolate::new(loader, StartupData::None, true);
+  js_check(isolate.execute("anon", "window = this"));
 
-  let mut runtime_isolate = CoreIsolate::new(StartupData::None, true);
+  let code = std::fs::read_to_string("js2/main.js").unwrap();
 
-  deno_typescript::mksnapshot_bundle(
-    &mut runtime_isolate,
-    &snapshot_path,
-    &bundle_path,
-    &main_module_name,
-  )
-  .expect("Failed to create snapshot");
-
-  // Compiler snapshot
-  let root_names = vec![c.join("js/compiler.ts")];
-  let bundle_path = o.join("COMPILER_SNAPSHOT.js");
-  let snapshot_path = o.join("COMPILER_SNAPSHOT.bin");
-
-  let main_module_name = deno_typescript::compile_bundle(
-    &bundle_path,
-    root_names,
-    Some(extern_crate_modules),
-  )
-  .expect("Bundle compilation failed");
-  assert!(bundle_path.exists());
-
-  let mut runtime_isolate = CoreIsolate::new(StartupData::None, true);
-
-  let mut custom_libs: HashMap<String, PathBuf> = HashMap::new();
-  custom_libs.insert(
-    "lib.deno.window.d.ts".to_string(),
-    c.join("js/lib.deno.window.d.ts"),
+  let module_specifier =
+    ModuleSpecifier::resolve_url("http://asdf/main.js").unwrap();
+  let result = futures::executor::block_on(
+    isolate.load_module(&module_specifier, Some(code)),
   );
-  custom_libs.insert(
-    "lib.deno.worker.d.ts".to_string(),
-    c.join("js/lib.deno.worker.d.ts"),
-  );
-  custom_libs.insert(
-    "lib.deno.shared_globals.d.ts".to_string(),
-    c.join("js/lib.deno.shared_globals.d.ts"),
-  );
-  custom_libs.insert(
-    "lib.deno.ns.d.ts".to_string(),
-    c.join("js/lib.deno.ns.d.ts"),
-  );
-  custom_libs.insert(
-    "lib.deno.unstable.d.ts".to_string(),
-    c.join("js/lib.deno.unstable.d.ts"),
-  );
-  runtime_isolate.register_op(
-    "op_fetch_asset",
-    deno_typescript::op_fetch_asset(custom_libs),
-  );
+  let mod_id = js_check(result);
+  js_check(isolate.mod_evaluate(mod_id));
 
-  deno_typescript::mksnapshot_bundle_ts(
-    &mut runtime_isolate,
-    &snapshot_path,
-    &bundle_path,
-    &main_module_name,
-  )
-  .expect("Failed to create snapshot");
+  let snapshot = isolate.snapshot();
+  let snapshot_slice: &[u8] = &*snapshot;
+  println!("Snapshot size: {}", snapshot_slice.len());
+  std::fs::write(&snapshot_path, snapshot_slice).unwrap();
+  println!("Snapshot written to: {} ", snapshot_path.display());
+}
+
+struct Loader {}
+
+impl ModuleLoader for Loader {
+  fn resolve(
+    &self,
+    specifier: &str,
+    referrer: &str,
+    _is_main: bool,
+  ) -> Result<ModuleSpecifier, ErrBox> {
+    ModuleSpecifier::resolve_import(specifier, referrer).map_err(ErrBox::from)
+  }
+
+  fn load(
+    &self,
+    _module_specifier: &ModuleSpecifier,
+    _maybe_referrer: Option<ModuleSpecifier>,
+    _is_dyn_import: bool,
+  ) -> Pin<Box<ModuleSourceFuture>> {
+    unreachable!()
+  }
 }

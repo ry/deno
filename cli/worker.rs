@@ -311,7 +311,22 @@ impl MainWorker {
         t.add("stderr", Box::new(stream));
       }
     }
-    worker.execute("bootstrap.mainRuntime()")?;
+
+    //worker.execute("bootstrap.mainRuntime()")?;
+
+    let module_specifier =
+      ModuleSpecifier::resolve_url("http:///anon/anon2").unwrap();
+    let code = "\
+      import { bootstrapMainRuntime } from 'http://asdf/main.js';\
+      bootstrapMainRuntime();";
+    let result = futures::executor::block_on(
+      worker
+        .isolate
+        .load_module(&module_specifier, Some(code.to_string())),
+    );
+    let mod_id = deno_core::js_check(result);
+    deno_core::js_check(worker.isolate.mod_evaluate(mod_id));
+
     Ok(worker)
   }
 }
