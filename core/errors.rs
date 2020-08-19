@@ -11,8 +11,21 @@ use std::ops::Deref;
 
 // The Send and Sync traits are required because deno is multithreaded and we
 // need to be able to handle errors across threads.
-pub trait AnyError: Any + Error + Send + Sync + 'static {}
-impl<T> AnyError for T where T: Any + Error + Send + Sync + Sized + 'static {}
+pub trait AnyError: Any + Error + Send + Sync + 'static {
+  fn kind(&self) -> &'static str;
+}
+
+impl AnyError for JSError {
+  fn kind(&self) -> &'static str {
+    "Other"
+  }
+}
+
+impl AnyError for ErrWithV8Handle {
+  fn kind(&self) -> &'static str {
+    "Other"
+  }
+}
 
 #[derive(Debug)]
 pub struct ErrBox(Box<dyn AnyError>);

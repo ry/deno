@@ -24,6 +24,47 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+trait CliError: deno_core::AnyError {
+  fn kind(&self) -> &'static str;
+}
+
+impl CliError for std::io::Error {
+  fn kind(&self) -> &'static str {
+    use io::ErrorKind::*;
+    match self.kind() {
+      NotFound => "NotFound",
+      PermissionDenied => "PermissionDenied",
+      ConnectionRefused => "ConnectionRefused",
+      ConnectionReset => "ConnectionReset",
+      ConnectionAborted => "ConnectionAborted",
+      NotConnected => "NotConnected",
+      AddrInUse => "AddrInUse",
+      AddrNotAvailable => "AddrNotAvailable",
+      BrokenPipe => "BrokenPipe",
+      AlreadyExists => "AlreadyExists",
+      InvalidInput => "TypeError",
+      InvalidData => "InvalidData",
+      TimedOut => "TimedOut",
+      Interrupted => "Interrupted",
+      WriteZero => "WriteZero",
+      UnexpectedEof => "UnexpectedEof",
+      Other => "Other",
+      WouldBlock => unreachable!(),
+      // Non-exhaustive enum - might add new variants
+      // in the future
+      _ => unreachable!(),
+    }
+  }
+}
+
+#[test]
+fn test_errbox_kind() {
+  let io_err =
+    std::io::Error::new(std::io::ErrorKind::NotFound, "foo".to_string());
+  let errbox = ErrBox::from(io_err);
+  assert_eq!(errbox.kind(), "NotFound");
+}
+
 // Warning! The values in this enum are duplicated in js/errors.ts
 // Update carefully!
 #[derive(Clone, Copy, PartialEq, Debug)]
