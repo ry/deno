@@ -21,6 +21,8 @@ mod shared_queue;
 mod zero_copy_buf;
 
 pub use rusty_v8 as v8;
+pub use serde_json;
+pub use url;
 
 pub use crate::flags::v8_set_flags;
 pub use crate::module_specifier::ModuleResolutionError;
