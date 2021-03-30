@@ -132,5 +132,6 @@
     utimeSync: __bootstrap.fs.utimeSync,
     HttpClient: __bootstrap.fetch.HttpClient,
     createHttpClient: __bootstrap.fetch.createHttpClient,
+    http: __bootstrap.http,
   };
 })(this);

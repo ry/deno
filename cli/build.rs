@@ -11,6 +11,7 @@ use deno_core::RuntimeOptions;
 use deno_runtime::deno_console;
 use deno_runtime::deno_crypto;
 use deno_runtime::deno_fetch;
+use deno_runtime::deno_http;
 use deno_runtime::deno_url;
 use deno_runtime::deno_web;
 use deno_runtime::deno_webgpu;
@@ -65,6 +66,7 @@ fn create_compiler_snapshot(
   let mut op_crate_libs = HashMap::new();
   op_crate_libs.insert("deno.console", deno_console::get_declaration());
   op_crate_libs.insert("deno.url", deno_url::get_declaration());
+  op_crate_libs.insert("deno.http", deno_http::get_declaration());
   op_crate_libs.insert("deno.web", deno_web::get_declaration());
   op_crate_libs.insert("deno.fetch", deno_fetch::get_declaration());
   op_crate_libs.insert("deno.webgpu", deno_webgpu::get_declaration());
@@ -265,6 +267,10 @@ fn main() {
   println!(
     "cargo:rustc-env=DENO_URL_LIB_PATH={}",
     deno_url::get_declaration().display()
+  );
+  println!(
+    "cargo:rustc-env=DENO_HTTP_LIB_PATH={}",
+    deno_http::get_declaration().display()
   );
   println!(
     "cargo:rustc-env=DENO_WEB_LIB_PATH={}",

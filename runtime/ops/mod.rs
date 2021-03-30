@@ -4,6 +4,7 @@ pub mod crypto;
 pub mod fetch;
 pub mod fs;
 pub mod fs_events;
+pub mod http;
 pub mod io;
 pub mod net;
 #[cfg(unix)]

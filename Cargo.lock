@@ -618,6 +618,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "deno_http"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "deno_core",
+ "hyper",
+ "serde",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "deno_lint"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -644,6 +656,7 @@ dependencies = [
  "deno_core",
  "deno_crypto",
  "deno_fetch",
+ "deno_http",
  "deno_url",
  "deno_web",
  "deno_webgpu",
