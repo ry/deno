@@ -11,19 +11,17 @@ async function main(addr) {
 
 async function handleConn(connRid) {
   while (true) {
-    const [connectionClosed, ...req] = await Deno.http.nextRequest(connRid);
+    const req = await Deno.http.nextRequest(connRid);
 
-    handle(req);
+    handle(req[1], req[2], req[3], req[4], req[5]);
 
-    if (connectionClosed) {
+    if (req[0]) {
       break;
     }
   }
 }
 
-async function handle(req) {
-  const [requestBodyRid, responseSenderRid, method, headers, url] = req;
-
+async function handle(requestBodyRid, responseSenderRid, method, headers, url) {
   // Don't care about request body, discard it outright.
   if (requestBodyRid) {
     Deno.core.close(requestBodyRid);
