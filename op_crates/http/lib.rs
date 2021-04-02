@@ -220,13 +220,12 @@ pub async fn op_next_request(
       let req = request_resource.request;
       let method = req.method().to_string();
 
-      let headers = Vec::with_capacity(req.headers().len());
-
-      // for (name, value) in req.headers().iter() {
-      //   let name = name.to_string();
-      //   let value = value.to_str().unwrap_or("").to_string();
-      //   headers.push((name, value));
-      // }
+      let mut headers = Vec::with_capacity(req.headers().len());
+      for (name, value) in req.headers().iter() {
+        let name = name.to_string();
+        let value = value.to_str().unwrap_or("").to_string();
+        headers.push((name, value));
+      }
 
       let url = req.uri().to_string();
 
@@ -368,9 +367,11 @@ pub async fn op_write_response(
     .ok_or_else(bad_resource_id)?;
   let mut body = RcRef::map(&resource, |r| &r.body).borrow_mut().await;
   let cancel = RcRef::map(resource, |r| &r.cancel);
-  todo!()
-  // body.send_data((*buf).into()).or_cancel(cancel).await??;
-  // Ok(())
+  body
+    .send_data(Vec::from(&*buf).into())
+    .or_cancel(cancel)
+    .await??;
+  Ok(())
 }
 
 type BytesStream =
