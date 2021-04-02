@@ -21,12 +21,12 @@
     return Deno.core.jsonOpAsync("op_http_read_request", requestRid);
   }
 
-  function respond(responseSenderRid, resp, ...zeroCopyBufs) {
+  function respond(responseSenderRid, resp, zeroCopyBuf) {
     return Deno.core.jsonOpSync("op_http_respond", [
       responseSenderRid,
       resp.status ?? 200,
       Object.entries(resp.headers ?? {}),
-    ], ...zeroCopyBufs);
+    ], zeroCopyBuf);
   }
 
   function writeResponse(responseBodyRid, zeroCopyBuf) {

@@ -36,12 +36,12 @@ async function echoRequest(req) {
     body: Deno.core.encode("ok"),
   };
 
-  const zeroCopyBufs = resp.body instanceof Uint8Array ? [resp.body] : [];
+  const zeroCopyBuf = resp.body instanceof Uint8Array ? resp.body : null;
 
   const { responseBodyRid } = Deno.http.respond(
     responseSenderRid,
     resp,
-    ...zeroCopyBufs,
+    zeroCopyBuf,
   );
 
   assert(responseBodyRid == null);

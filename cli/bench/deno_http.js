@@ -35,12 +35,12 @@ async function handle(req) {
   // in a single op, in other case a "response body" resource will be
   // created and we'll be streaming it.
   const body = resp.body ?? new Uint8Array();
-  const zeroCopyBufs = body instanceof Uint8Array ? [body] : [];
+  const zeroCopyBuf = body instanceof Uint8Array ? body : null;
 
   const responseBodyRid = Deno.http.respond(
     responseSenderRid,
     resp,
-    ...zeroCopyBufs,
+    zeroCopyBuf,
   );
 
   if (responseBodyRid) {
