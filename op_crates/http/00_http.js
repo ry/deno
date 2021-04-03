@@ -2,6 +2,15 @@
 "use strict";
 
 ((window) => {
+  function flatEntries(obj) {
+    const entries = [];
+    for (const key in obj) {
+      entries.push(key);
+      entries.push(obj[key]);
+    }
+    return entries;
+  }
+
   function createServer(address) {
     return Deno.core.jsonOpAsync(
       "op_http_create_server",
@@ -25,7 +34,7 @@
     return Deno.core.jsonOpSync("op_http_respond", [
       responseSenderRid,
       resp.status ?? 200,
-      Object.entries(resp.headers ?? {}),
+      flatEntries(resp.headers ?? {}),
     ], zeroCopyBuf);
   }
 

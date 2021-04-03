@@ -278,7 +278,7 @@ pub struct RespondArgs(
   // status:
   u16,
   // headers:
-  Vec<(String, String)>,
+  Vec<String>,
 );
 
 pub fn op_respond(
@@ -300,9 +300,10 @@ pub fn op_respond(
 
   let mut builder = Response::builder().status(status);
 
-  builder.headers_mut().unwrap().reserve(headers.len());
-  for (key, value) in headers {
-    builder = builder.header(&key, &value);
+  let headers_count = headers.len() / 2;
+  builder.headers_mut().unwrap().reserve(headers_count);
+  for i in 0..headers_count {
+    builder = builder.header(&headers[i], &headers[i + 1]);
   }
 
   let res;
