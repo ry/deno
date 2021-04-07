@@ -1196,6 +1196,21 @@ declare namespace Deno {
     bytesSentData: number;
     bytesReceived: number;
   }
+
+  export interface HttpEvent {
+    readonly request: Request;
+    respondWith(r: Response | Promise<Response>): void;
+  }
+
+  /** **UNSTABLE**: new API, yet to be vetted.
+   *
+   * Parse HTTP requests from the given connection
+   *
+   * ```ts
+   * const requests = await Deno.startHttp(conn);
+   * ```
+   */
+  export function startHttp(conn: Conn): AsyncIterableIterator<HttpEvent>;
 }
 
 declare function fetch(
