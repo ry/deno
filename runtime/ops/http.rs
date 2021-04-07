@@ -23,7 +23,7 @@ use hyper::body::HttpBody;
 use hyper::http;
 use hyper::server::conn::Connection;
 use hyper::server::conn::Http;
-use hyper::service::Service;
+use hyper::service::Service as HyperService;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
@@ -39,7 +39,7 @@ use std::task::Poll;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
-use tokio_rustls as tls;
+use tokio_rustls::server::TlsStream;
 use tokio_util::io::StreamReader;
 
 pub fn init(rt: &mut deno_core::JsRuntime) {
@@ -69,17 +69,17 @@ where
   }
 }
 
-struct DenoServiceInner {
+struct ServiceInner {
   pub request: Request<Body>,
   pub response_tx: oneshot::Sender<Response<Body>>,
 }
 
 #[derive(Clone)]
-struct DenoService {
-  inner: Rc<RefCell<Option<DenoServiceInner>>>,
+struct Service {
+  inner: Rc<RefCell<Option<ServiceInner>>>,
 }
 
-impl Default for DenoService {
+impl Default for Service {
   fn default() -> Self {
     Self {
       inner: Rc::new(RefCell::new(None)),
@@ -87,7 +87,7 @@ impl Default for DenoService {
   }
 }
 
-impl Service<Request<Body>> for DenoService {
+impl HyperService<Request<Body>> for Service {
   type Response = Response<Body>;
   type Error = http::Error;
   #[allow(clippy::type_complexity)]
@@ -103,7 +103,7 @@ impl Service<Request<Body>> for DenoService {
 
   fn call(&mut self, req: Request<Body>) -> Self::Future {
     let (resp_tx, resp_rx) = oneshot::channel();
-    self.inner.borrow_mut().replace(DenoServiceInner {
+    self.inner.borrow_mut().replace(ServiceInner {
       request: req,
       response_tx: resp_tx,
     });
@@ -113,28 +113,28 @@ impl Service<Request<Body>> for DenoService {
 }
 
 enum ConnType {
-  Tcp(Rc<RefCell<Connection<TcpStream, DenoService, LocalExecutor>>>),
-  Tls(
-    Rc<
-      RefCell<
-        Connection<
-          tls::server::TlsStream<TcpStream>,
-          DenoService,
-          LocalExecutor,
-        >,
-      >,
-    >,
-  ),
+  Tcp(Rc<RefCell<Connection<TcpStream, Service, LocalExecutor>>>),
+  Tls(Rc<RefCell<Connection<TlsStream<TcpStream>, Service, LocalExecutor>>>),
 }
 
 struct ConnResource {
   pub hyper_connection: ConnType,
-  pub deno_service: DenoService,
+  pub deno_service: Service,
 }
 
 impl Resource for ConnResource {
   fn name(&self) -> Cow<str> {
     "httpConnection".into()
+  }
+}
+
+impl Future for ConnResource {
+  type Output = Result<(), hyper::Error>;
+  fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match &self.hyper_connection {
+      ConnType::Tcp(c) => c.borrow_mut().poll_unpin(cx),
+      ConnType::Tls(c) => c.borrow_mut().poll_unpin(cx),
+    }
   }
 }
 
@@ -258,7 +258,7 @@ pub fn op_http_serve_connection(
   tcp_stream_rid: ResourceId,
   _data: Option<ZeroCopyBuf>,
 ) -> Result<ResourceId, AnyError> {
-  let deno_service = DenoService::default();
+  let deno_service = Service::default();
 
   if let Some(resource_rc) = state
     .resource_table
