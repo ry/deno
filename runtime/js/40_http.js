@@ -90,11 +90,10 @@
     }
   }
 
-  function readRequest(requestRid, zeroCopyBuf) {
-    return Deno.core.jsonOpAsync(
+  function readRequest(requestRid) {
+    return Deno.core.binOpAsync(
       "op_http_read_request",
       requestRid,
-      zeroCopyBuf,
     );
   }
 
@@ -179,14 +178,11 @@
         try {
           // This is the largest possible size for a single packet on a TLS
           // stream.
-          const chunk = new Uint8Array(16 * 1024 + 256);
-          const read = await readRequest(
-            requestBodyRid,
-            chunk,
-          );
-          if (read > 0) {
-            // We read some data. Enqueue it onto the stream.
-            controller.enqueue(chunk.subarray(0, read));
+          console.log("readRequest before");
+          const chunk = await readRequest(requestBodyRid);
+          console.log(`readRequest after ${chunk}`);
+          if (chunk && chunk.length > 0) {
+            controller.enqueue(chunk);
           } else {
             // We have reached the end of the body, so we close the stream.
             controller.close();

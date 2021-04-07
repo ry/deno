@@ -40,11 +40,10 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio_rustls::server::TlsStream;
-use tokio_util::io::StreamReader;
 
 pub fn init(rt: &mut deno_core::JsRuntime) {
   super::reg_json_async(rt, "op_http_next_request", op_next_request);
-  super::reg_json_async(rt, "op_http_read_request", op_read_request);
+  super::reg_bin_async(rt, "op_http_read_request", op_read_request);
   super::reg_json_async(rt, "op_http_poll", op_poll);
   super::reg_json_sync(rt, "op_http_respond", op_respond);
   super::reg_json_sync(
@@ -206,11 +205,10 @@ pub async fn op_next_request(
         let stream: BytesStream = Box::pin(req.into_body().map(|r| {
           r.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
         }));
-        let stream_reader = StreamReader::new(stream);
         let mut state = state.borrow_mut();
         let request_body_rid = state.resource_table.add(RequestBodyResource {
           conn_rid,
-          reader: AsyncRefCell::new(stream_reader),
+          stream: AsyncRefCell::new(stream),
           cancel: CancelHandle::default(),
         });
         Some(request_body_rid)
@@ -396,8 +394,10 @@ pub async fn op_read_request(
   state: Rc<RefCell<OpState>>,
   rid: ResourceId,
   data: Option<ZeroCopyBuf>,
-) -> Result<usize, AnyError> {
-  let mut data = data.ok_or_else(null_opbuf)?;
+) -> Result<Vec<u8>, AnyError> {
+  assert!(data.is_none());
+
+  //let mut data = data.ok_or_else(null_opbuf)?;
 
   let resource = state
     .borrow()
@@ -411,9 +411,20 @@ pub async fn op_read_request(
     .get::<ConnResource>(resource.conn_rid)
     .ok_or_else(bad_resource_id)?;
 
-  let mut reader = RcRef::map(&resource, |r| &r.reader).borrow_mut().await;
-  let cancel = RcRef::map(resource, |r| &r.cancel);
+  let mut stream = RcRef::map(&resource, |r| &r.stream).borrow_mut().await;
+  // let cancel = RcRef::map(resource, |r| &r.cancel);
+
+  let mut read_fut = stream.next().boxed_local();
+  /*
+  match stream.next().await {
+    Some(Ok(buf)) => Ok(buf.to_vec()),
+    Some(Err(e)) => Err(e.into()),
+    None => {
+      todo!()
+    }
+  }
   let mut read_fut = reader.read(&mut data).try_or_cancel(cancel).boxed_local();
+  */
 
   poll_fn(|cx| {
     let r = read_fut.poll_unpin(cx);
@@ -431,7 +442,11 @@ pub async fn op_read_request(
     }
 
     if let Poll::Ready(result) = r {
-      return Poll::Ready(result.map_err(AnyError::from));
+      return Poll::Ready(match result {
+        Some(Ok(buf)) => Ok(buf.to_vec()),
+        Some(Err(e)) => Err(e.into()),
+        None => Ok([].to_vec()),
+      });
     }
 
     Poll::Pending
@@ -496,7 +511,7 @@ type BytesStream =
 
 struct RequestBodyResource {
   conn_rid: ResourceId,
-  reader: AsyncRefCell<StreamReader<BytesStream, bytes::Bytes>>,
+  stream: AsyncRefCell<BytesStream>,
   cancel: CancelHandle,
 }
 

@@ -164,7 +164,6 @@ pub fn boxed_slice_to_uint8array<'sc>(
   scope: &mut v8::HandleScope<'sc>,
   buf: Box<[u8]>,
 ) -> v8::Local<'sc, v8::Uint8Array> {
-  assert!(!buf.is_empty());
   let buf_len = buf.len();
   let backing_store = v8::ArrayBuffer::new_backing_store_from_boxed_slice(buf);
   let backing_store_shared = backing_store.make_shared();
